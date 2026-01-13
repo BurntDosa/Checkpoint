@@ -138,9 +138,19 @@ def main():
         # Use recursion_limit purely as safety
         final_state = app.invoke(initial_state, {"recursion_limit": 10})
         
+        if final_state is None:
+             print("Error: Workflow failed to return state.")
+             return
+
+        # Handle None in generated_markdown explicitly
+        markdown_content = final_state.get("generated_markdown")
+        if not markdown_content:
+            print("No content generated (LLM might have failed or no changes).")
+            return
+            
         if args.dry_run:
             print("\n--- Generated Checkpoint ---\n")
-            print(final_state["generated_markdown"])
+            print(markdown_content)
         else:
             print(f"Checkpoint saved to: {final_state['filepath']}")
             

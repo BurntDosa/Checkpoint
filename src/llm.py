@@ -4,6 +4,8 @@ from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
+import time
+
 class GeminiLM(dspy.LM):
     """
     Custom DSPy provider for Google's new genai SDK.
@@ -17,53 +19,38 @@ class GeminiLM(dspy.LM):
         """
         Basic request method required by DSPy.
         """
-        # DSPy often passes 'messages' (list of dicts) if it's a chat model or compiled module.
-        # But for basic generation, we want the prompt string.
-        # Check if 'messages' is in kwargs and clean it up.
-        
         messages = kwargs.pop("messages", None)
-        
-        # dspy might define a 'system' prompt separately
-        # Clean kwargs for config
         valid_config_keys = [
             'temperature', 'top_p', 'top_k', 'candidate_count', 
             'max_output_tokens', 'stop_sequences', 'response_mime_type'
         ]
-        
-        # Filter kwargs to only valid keys for GenerateContentConfig
-        # Note: 'messages' should NOT be in config.
         config_args = {k: v for k, v in {**self.kwargs, **kwargs}.items() if k in valid_config_keys}
-        
         config = types.GenerateContentConfig(**config_args)
         
-        # Structure the content. 
-        # If 'messages' exists, we might need to format it into a single string or a list of Content objects
-        # For simplicity with dspy's basic generation expectation, we might just rely on 'prompt' if it's the full string.
-        # But if prompt is None and messages exist, use messages.
-        
         final_contents = prompt
-        
         if not final_contents and messages:
-            # Simple concatenation for now if dspy passed messages
-            # Or better, let's just dump it to string if it's a list
             final_contents = str(messages)
 
-        try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=final_contents,
-                config=config
-            )
-            
-            # Extract text from response
-            if response.text:
-                return [response.text]
-            return [""]
-            
-        except Exception as e:
-            print(f"Error calling Gemini: {e}")
-            # print(f"DEBUG: kwargs keys: {kwargs.keys()}")
-            return [""]
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=final_contents,
+                    config=config
+                )
+                if response.text:
+                    return [response.text]
+                return [""]
+            except Exception as e:
+                if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
+                    # Simple exponential backoff or 35s wait as suggested by error
+                    print(f"Rate limit hit. Waiting 35s before retry {attempt+1}/{max_retries}...")
+                    time.sleep(35) 
+                    continue
+                print(f"Error calling Gemini: {e}")
+                return [""]
+        return [""]
 
     def __call__(self, **kwargs):
         """
