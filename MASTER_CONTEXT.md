@@ -54,3 +54,5 @@ This repository is an automated intelligence layer designed to reduce developer 
 - **ChromaDB**: Vector storage for semantic context.
 - **Git**: System-level Git configuration is required for `get_local_user_email`.
 - **System Utils**: `tree` or `find` for generating structural maps.
+
+Hi
