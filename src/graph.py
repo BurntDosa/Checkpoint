@@ -27,7 +27,8 @@ def analyze_diff(state: GraphState):
 
 # Node: Storage
 def save_output(state: GraphState):
-    filepath = save_checkpoint(state["generated_markdown"], state["commit_hash"])
+    author = state["metadata"].get("author", "Unknown")
+    filepath = save_checkpoint(state["generated_markdown"], state["commit_hash"], author=author)
     return {"filepath": filepath}
 
 # Node: Indexing

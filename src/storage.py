@@ -8,15 +8,23 @@ def ensure_checkpoint_dir():
     """Ensures the checkpoints directory exists."""
     Path(CHECKPOINT_DIR).mkdir(parents=True, exist_ok=True)
 
-def save_checkpoint(content: str, commit_hash: str) -> str:
+def save_checkpoint(content: str, commit_hash: str, author: str = None) -> str:
     """
     Saves the markdown content to a file.
-    Format: YYYY-MM-DD-[commit_hash].md
+    Format: Checkpoint-[AuthorName]-[YYYY-MM-DD]-[short_hash].md
     Returns the absolute path of the saved file.
     """
     ensure_checkpoint_dir()
     date_str = datetime.datetime.now().strftime("%Y-%m-%d")
-    filename = f"{date_str}-{commit_hash}.md"
+    short_hash = commit_hash[:7]
+    
+    # Sanitize Author Name
+    if author:
+        safe_author = "".join([c if c.isalnum() else "_" for c in author])
+        filename = f"Checkpoint-{safe_author}-{date_str}-{short_hash}.md"
+    else:
+        filename = f"{date_str}-{commit_hash}.md" # Fallback
+        
     file_path = os.path.join(CHECKPOINT_DIR, filename)
     
     with open(file_path, "w") as f:
@@ -28,13 +36,17 @@ def list_checkpoints():
     """Lists all checkpoint files (standard commit checkpoints only)."""
     if not os.path.exists(CHECKPOINT_DIR):
         return []
-    # Filter for standard checkpoints: YYYY-MM-DD-hash.md
-    # Exclude Master Context and User Checkpoints
+    # Filter for standard checkpoints: Checkpoint-[Author]-[Date]-[Hash].md OR Old format YYYY-MM-DD-hash.md
+    # Exclude User Catchup Checkpoints: Checkpoint_[Author].md (Underscore separator for catchups)
+    
     all_files = Path(CHECKPOINT_DIR).glob("*.md")
     valid_checkpoints = []
     for f in all_files:
+        # Exclude Catchup files (Checkpoint_Username.md)
         if f.name.startswith("Checkpoint_") or f.name.startswith("catchup_") or f.name == "MASTER_CONTEXT.md":
             continue
+            
+        # Include Standard Checkpoints (Checkpoint-Username-Date-Hash.md or old format)
         valid_checkpoints.append(f)
         
     return sorted(valid_checkpoints)
