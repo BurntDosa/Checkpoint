@@ -1,39 +1,59 @@
-# Master Context: AI-Driven Onboarding & Catch-up System
+# The Master Context: Repository Intelligence System
 
 ## Architectural Overview
-This repository serves as an automated documentation and context-management engine. It is designed to ingest repository state and historical changes to generate high-level summaries for developers.
+This system is designed to reduce developer cognitive load by automatically documenting codebase evolution and providing structured onboarding paths. It operates through three primary modes:
 
-### Core Components:
-1.  **Entry Point (`main.py`)**: A CLI interface supporting three primary modes:
-    *   **Checkpoint**: Logging current changes.
-    *   **Onboard (`--onboard`)**: Generating the "Master Context" map of the repository.
-    *   **Catch-up (`--catchup`)**: Summarizing recent activity based on Git history and checkpoint logs.
-2.  **Agent Layer (`src/agents.py`)**: Contains the "brain" of the system. It uses specific signatures (e.g., `CatchupSummarizer`, `OnboardingSynthesizer`) to transform raw data into structured Markdown.
-3.  **Workflow Orchestration (`src/graph.py`)**: Likely utilizes a graph-based state machine to manage the flow between data retrieval, LLM synthesis, and file persistence.
-4.  **LLM Provider (`src/llm.py`)**: Interfaces with the Gemini API. It includes custom logic for self-healing and rate-limit management.
-5.  **Storage & Vector DB (`src/storage.py`, `src/vector_db.py`)**: Manages the persistence of checkpoint files and provides semantic search capabilities (via ChromaDB), though the vector store is now kept local-only and not tracked in Git.
+1.  **Checkpointing**: Captures atomic changes and historical context.
+2.  **Onboarding (`--onboard`)**: Generates and updates this `MASTER_CONTEXT.md` file by analyzing the file tree and historical checkpoints.
+3.  **Catch-up (`--catchup`)**: Aggregates changes over a specific timeframe to summarize activity for returning developers.
+
+### Core Components
+-   **Entry Point (`main.py`)**: A CLI-based interface managing state validation and mode selection.
+-   **Agent Layer (`src/agents.py`)**: Utilizes a modular LLM framework (DSPy patterns) where "Signatures" define task intent and "Modules" handle the execution of summaries and synthesis.
+-   **Workflow Engine (`src/graph.py`)**: Likely uses a directed graph (e.g., LangGraph) to orchestrate the flow of data between agents and storage.
+-   **Intelligence Layer (`src/llm.py` & `src/vector_db.py`)**: Manages interactions with LLM providers (specifically Google Gemini) and local vector embeddings for retrieval-augmented context.
+-   **Utility Layer (`src/git_utils.py` & `src/storage.py`)**: Interfaces with the local Git environment and manages the file-based persistence of checkpoints.
+
+---
 
 ## Key Decision Log
-*   **Documentation-as-Code Integration**: The decision was made to trigger `--onboard` automatically during the checkpoint process. This ensures that `MASTER_CONTEXT.md` is always a "living document" synced with the latest commit.
-*   **Gemini Rate Limit Resilience**: To handle `RESOURCE_EXHAUSTED` (429) errors from the Gemini API, a synchronous 35-second sleep mechanism was implemented. This prioritizes task completion over execution speed.
-*   **Separation of Data and Logic**: Binary files from `.chroma_db/` were explicitly removed from version control and added to `.gitignore`. This forces a clean separation between the application code and the transient local cache of the vector store.
-*   **Date-Based Checkpoint Filtering**: The system uses a strict `YYYY-MM-DD` naming convention for checkpoint files to allow the `storage.py` layer to efficiently filter history without parsing every file's content.
+
+### 1. Documentation-as-Code (Jan 2026)
+**Decision**: Integrate `MASTER_CONTEXT.md` generation directly into the automated checkpoint workflow.
+**Reasoning**: Manual documentation inevitably rots. By making the high-level "Map" a generated artifact, we ensure that new developers and AI agents always have an accurate representation of the repository.
+
+### 2. Resilience over Latency (Jan 2026)
+**Decision**: Implement a 35-second synchronous sleep upon encountering `RESOURCE_EXHAUSTED` (429) errors from the Gemini API.
+**Reasoning**: In automation pipelines, a delayed success is significantly better than a fast failure that breaks the CI/CD or local workflow.
+
+### 3. Separation of Logic and Persistence (Jan 2026)
+**Decision**: Purge `.chroma_db` binary files from version control and add them to `.gitignore`.
+**Reasoning**: Tracking binary database files caused repository bloat and merge conflicts. The system now requires an explicit bootstrap/ingestion step, treating the vector store as a local cache rather than a source of truth.
+
+---
 
 ## Gotchas & Tech Debt
-*   **System Tool Dependency**: The onboarding logic relies on system-level utilities (`tree` or `find`). If these are missing from the developer's environment, the file tree generation will fail.
-*   **Synchronous Delay**: The 35-second retry sleep in `src/llm.py` is blocking. In a high-concurrency environment, this would cause significant bottlenecks.
-*   **State Validation**: While `main.py` now includes null-checks for workflow states, the system is sensitive to the structure of the `final_state` object. Adding a key that the agents don't expect can cause silent failures in documentation generation.
-*   **Git Config Dependency**: The catch-up feature requires a local Git identity (`user.email`) to be configured to correctly identify and filter the "last activity" of the current user.
+
+### 1. Synchronous Rate Limiting
+The 35-second sleep in `src/llm.py` is blocking. While reliable for single-user CLI runs, it will bottleneck the system if multiple agents are parallelized or if the system is moved to a multi-user web backend.
+
+### 2. System Tool Dependency
+The `get_file_tree` utility relies on the system-level `tree` or `find` commands. Windows environments or minimal Docker containers without these utilities will fail.
+
+### 3. Date-Based File Filtering
+Storage retrieval relies heavily on a `YYYY-MM-DD` naming convention for checkpoints. If a checkpoint file is renamed or the format is altered, the `catchup` and `onboard` logic may miss historical context.
+
+---
 
 ## Dependency Map
+
 ### External Dependencies
-*   **Gemini API**: Primary LLM provider for synthesis.
-*   **ChromaDB**: Used for vector embeddings and semantic search (local persistence).
-*   **Git**: Required for metadata extraction and automation hooks.
+-   **LLM Provider**: Google Generative AI (Gemini Pro).
+-   **Vector DB**: ChromaDB (Local persistence).
+-   **Environment**: Git CLI must be configured with a local user email.
 
 ### Internal Module Flow
-*   `main.py` -> `src/graph.py` (Orchestrator)
-*   `src/graph.py` -> `src/agents.py` (Logic)
-*   `src/agents.py` -> `src/llm.py` (Provider)
-*   `src/graph.py` -> `src/storage.py` (Persistence)
-*   `src/storage.py` -> `checkpoints/*.md` (Data Source)
+1.  **CLI (`main.py`)** calls the **Workflow (`src/graph.py`)**.
+2.  **Workflow** fetches context via **Git Utils** and **Storage**.
+3.  **Agents (`src/agents.py`)** process the raw data using **LLM (`src/llm.py`)**.
+4.  **Results** are persisted back via **Storage** and staged via **Git Utils**.

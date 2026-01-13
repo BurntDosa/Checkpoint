@@ -1,22 +1,21 @@
 # While You Were Gone
 
 ### Changes Summary
-- **AI-Driven Onboarding & Catch-up**: You can now run `python main.py --onboard` to generate a repository map and `python main.py --catchup` to see summarized changes based on your last activity date.
-- **Automated Master Context**: The system now automatically maintains a `MASTER_CONTEXT.md` file. This is integrated into the checkpoint workflow, ensuring high-level documentation is always version-controlled and up-to-date.
-- **Improved LLM Reliability**: The `GeminiLM` provider now handles `RESOURCE_EXHAUSTED` (429) errors gracefully with a 35-second cooldown and a 3-attempt retry mechanism.
-- **Data Cleanup**: Cleaned the repository history by removing `.chroma_db` binary files and SQLite databases. Local vector stores are now excluded via `.gitignore`.
+- **AI-Driven Onboarding & Catch-up:** A new **Agent Layer** has been introduced. You can now use `python main.py --onboard` to generate a repository map and `python main.py --catchup` to synthesize changes since your last activity.
+- **Automated Master Context:** The project now automatically generates and commits a `MASTER_CONTEXT.md` file during the checkpoint workflow. This serves as a version-controlled "source of truth" for the repository's structure and intent.
+- **Improved Reliability:** The system now handles `RESOURCE_EXHAUSTED` (429) errors from the Gemini API with an autonomous 35-second sleep/retry mechanism.
+- **Repository Hygiene:** The `.chroma_db/` directory and its binary files have been removed from version control and added to `.gitignore`. Local setups now require an ingestion process to populate the vector store.
 
 ### New Dependencies
-- **System Utilities**: The onboarding logic now utilizes the system-level `tree` or `find` commands to generate file structures.
-- **Git Metadata**: The system now queries local Git config (`user.email`) and commit history to personalize catch-up summaries.
+- **System Utilities:** The system now relies on system-level `tree` or `find` commands to generate structural maps.
+- **Git Metadata:** The tool now interfaces with local Git configurations (`user.email`) and commit history to personalize catch-up summaries.
 
 ### Refactors
-- **`main.py`**: Transitioned to a multi-mode CLI interface with enhanced state validation and null-checks for workflow outputs.
-- **`src/agents.py`**: Created a dedicated Agent Layer containing `CatchupGenerator` and `MasterContextGenerator`.
-- **`src/storage.py`**: Enhanced retrieval logic to filter checkpoints by `YYYY-MM-DD` naming conventions and added persistence for new document types.
-- **Workflow Renaming**: Updated CI/CD steps from "Run Checkpoint Agent" to "Run Checkpoint Agent & Update Master Context".
+- **`main.py` Entry Point:** Introduced strict state validation and null-checks following workflow execution to prevent crashes.
+- **LLM Layer:** Centralized the `GeminiLM` request logic, adding a 3-attempt retry policy and simplifying configuration management.
+- **Workflow Renaming:** Standardized automation steps to include context updates (e.g., "Run Checkpoint Agent & Update Master Context").
 
 ### Current Focus
-- Establishing "Documentation-as-Code" where AI agents maintain the project roadmap.
-- Enhancing system autonomy through self-healing LLM request logic.
-- Ensuring a clean separation between application logic and local persistence (ChromaDB).
+- **Documentation Stability:** Ensuring the `main.py --onboard` logic remains stable, as it is now a critical path for the automated workflow.
+- **Execution Performance:** Monitoring the impact of the synchronous 35-second rate-limit sleep on total execution time.
+- **Environment Bootstrapping:** Establishing a standardized process for new contributors to initialize the local vector database now that binary files are no longer tracked.
