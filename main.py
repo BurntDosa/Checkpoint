@@ -38,9 +38,6 @@ def process_catchup(email):
     checkpoints = get_checkpoints_since(last_commit['date'])
     if not checkpoints:
         print("  No checkpoints found since last activity.")
-        # We might still want to generate a "You are up to date" file or just skip?
-        # Skipping is better to reduce API noise, but if we want the file to exist...
-        # Let's skip for now.
         return
         
     combined_content = "\n\n".join(checkpoints)
@@ -48,6 +45,10 @@ def process_catchup(email):
     generator = CatchupGenerator()
     result = generator(checkpoints_content=combined_content, user_last_active_date=str(last_commit['date']))
     
+    if not result.summary_markdown:
+        print(f"  Error: Failed to generate summary for {email} (LLM returned None).")
+        return
+
     username = last_commit['author']
     filepath = save_catchup(result.summary_markdown, username)
     print(f"  Checkpoints updated: {filepath}")
@@ -84,6 +85,11 @@ def main():
             generator = MasterContextGenerator()
             result = generator(file_structure=file_tree, recent_checkpoints=recent_content)
             
+            # Handle None result
+            if not result.master_markdown:
+                print("Error: Failed to generate Master Context (LLM returned None).")
+                return
+
             filepath = save_master_context(result.master_markdown)
             print(f"Master Context updated: {filepath}")
             return
@@ -92,7 +98,12 @@ def main():
         if args.catchup_all:
             print("Running Automated Catchup for ALL active developers...")
             authors = get_active_authors()
-            for email in authors:
+            import time
+            for i, email in enumerate(authors):
+                if i > 0:
+                    print("Waiting 60s before next user to respect rate limits...")
+                    time.sleep(60) 
+                
                 try:
                     process_catchup(email)
                 except Exception as e:
@@ -114,45 +125,50 @@ def main():
             process_catchup(email)
             return
 
-        # MODE 4: STANDARD CHECKPOINT (Single Commit)
-        commit_hash = args.commit if args.commit else get_current_commit_hash()
-        print(f"Analyzing commit: {commit_hash}")
+        # MODE 4: STANDARD CHECKPOINT (Single Commit) - OPTIONAL / DEPRECATED DEFAULT
+        # Only run if explicitly requested via flag (we can add --standard later if needed)
+        # For now, we only want targeted docs (Onboard / Catchup) or explicit commit analysis.
         
-        diff_content = get_diff(commit_hash)
-        if not diff_content.strip():
-            print("No changes found in diff.")
-            return
-
-        metadata = get_commit_metadata(commit_hash)
-        
-        initial_state = {
-            "diff_content": diff_content,
-            "commit_hash": commit_hash,
-            "metadata": metadata,
-            "generated_markdown": None,
-            "filepath": None
-        }
-        
-        # Invoke the LangGraph workflow
-        # Note: In a real run, we'd need the API key set.
-        # Use recursion_limit purely as safety
-        final_state = app.invoke(initial_state, {"recursion_limit": 10})
-        
-        if final_state is None:
-             print("Error: Workflow failed to return state.")
-             return
-
-        # Handle None in generated_markdown explicitly
-        markdown_content = final_state.get("generated_markdown")
-        if not markdown_content:
-            print("No content generated (LLM might have failed or no changes).")
-            return
+        if args.commit:
+             # If user explicitly asks for a commit analysis
+            commit_hash = args.commit
+            print(f"Analyzing commit: {commit_hash}")
             
-        if args.dry_run:
-            print("\n--- Generated Checkpoint ---\n")
-            print(markdown_content)
+            diff_content = get_diff(commit_hash)
+            if not diff_content.strip():
+                print("No changes found in diff.")
+                return
+
+            metadata = get_commit_metadata(commit_hash)
+            
+            initial_state = {
+                "diff_content": diff_content,
+                "commit_hash": commit_hash,
+                "metadata": metadata,
+                "generated_markdown": None,
+                "filepath": None
+            }
+            
+            final_state = app.invoke(initial_state, {"recursion_limit": 10})
+            
+            if final_state is None:
+                 print("Error: Workflow failed to return state.")
+                 return
+
+            markdown_content = final_state.get("generated_markdown")
+            if not markdown_content:
+                print("No content generated.")
+                return
+                
+            if args.dry_run:
+                print("\n--- Generated Checkpoint ---\n")
+                print(markdown_content)
+            else:
+                print(f"Checkpoint saved to: {final_state['filepath']}")
         else:
-            print(f"Checkpoint saved to: {final_state['filepath']}")
+            # If no arguments provided, do nothing (or print help)
+            if not (args.onboard or args.catchup or args.catchup_all):
+                parser.print_help()
             
     except Exception as e:
         print(f"Error: {e}")

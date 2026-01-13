@@ -34,13 +34,10 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          # 1. Standard Checkpoint
-          python main.py
-          
-          # 2. Update Master Context (The Map)
+          # 1. Update Master Context (The Map)
           python main.py --onboard
 
-          # 3. Update All User Catchups (The News Feed)
+          # 2. Update All User Catchups (The News Feed)
           python main.py --catchup-all
           
       - name: Commit Checkpoint & Context
@@ -49,5 +46,5 @@ jobs:
           git config --global user.email 'agent@codecheckpoint.local'
           git add checkpoints/
           git add MASTER_CONTEXT.md || echo "Master Context not changed"
-          git commit -m "docs: generate checkpoint, master context & catchups for ${{ github.sha }}" || echo "No changes to commit"
+          git commit -m "docs: update master context & catchups for ${{ github.sha }}" || echo "No changes to commit"
           git push origin HEAD:${{ github.ref }}
