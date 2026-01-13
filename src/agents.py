@@ -83,16 +83,20 @@ class OnboardingSynthesizer(dspy.Signature):
     """
     file_structure = dspy.InputField(desc="The file tree structure of the repository.")
     recent_checkpoints = dspy.InputField(desc="Recent high-level checkpoints to understand history.")
+    dependency_graph = dspy.InputField(desc="Mermaid.js diagram showing file dependencies.")
+    class_hierarchy = dspy.InputField(desc="Mermaid.js diagram showing class inheritance.")
     
-    master_markdown = dspy.OutputField(desc="A comprehensive guide. Sections: Architectural Overview, Key Decision Log, Gotchas & Tech Debt, Dependency Map.")
+    master_markdown = dspy.OutputField(desc="A comprehensive guide. Sections: Architectural Overview, Key Decision Log, Gotchas & Tech Debt, Dependency Map (Include the provided mermaid diagrams here).")
 
 class MasterContextGenerator(dspy.Module):
     def __init__(self):
         super().__init__()
         self.synthesizer = dspy.ChainOfThought(OnboardingSynthesizer)
         
-    def forward(self, file_structure, recent_checkpoints):
+    def forward(self, file_structure, recent_checkpoints, dependency_graph, class_hierarchy):
         return self.synthesizer(
             file_structure=file_structure,
-            recent_checkpoints=recent_checkpoints
+            recent_checkpoints=recent_checkpoints,
+            dependency_graph=dependency_graph,
+            class_hierarchy=class_hierarchy
         )

@@ -6,6 +6,7 @@ from src.agents import CatchupGenerator, MasterContextGenerator
 from src.storage import get_checkpoints_since, list_checkpoints, save_master_context, save_catchup
 from src.llm import configure_gemini
 import subprocess
+from src.mermaid_utils import generate_file_dependency_mermaid, generate_class_hierarchy_mermaid
 
 def get_file_tree(path="."):
     """Simple wrapper to get file tree using `tree` or `find`."""
@@ -71,10 +72,18 @@ def main():
         sys.exit(1)
         
     try:
+
         # MODE 1: ONBOARDING (New Joinee)
         if args.onboard:
             print("Generating Master Context for New Joinee...")
             file_tree = get_file_tree()
+            
+            # Generate Mermaid Diagrams
+            print("  Generating dependency graph...")
+            dep_graph = generate_file_dependency_mermaid(".")
+            print("  Generating class hierarchy...")
+            class_hierarchy = generate_class_hierarchy_mermaid(".")
+            
             # Fetch last 5 checkpoints for context
             all_checkpoints = list_checkpoints()
             recent_content = ""
@@ -83,7 +92,12 @@ def main():
                     recent_content += f"--- Checkpoint: {cp.name} ---\n{f.read()}\n\n"
                     
             generator = MasterContextGenerator()
-            result = generator(file_structure=file_tree, recent_checkpoints=recent_content)
+            result = generator(
+                file_structure=file_tree, 
+                recent_checkpoints=recent_content,
+                dependency_graph=dep_graph,
+                class_hierarchy=class_hierarchy
+            )
             
             # Handle None result
             if not result.master_markdown:
