@@ -1,0 +1,45 @@
+name: Code Checkpoint
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    types: [opened, synchronize, closed]
+
+jobs:
+  checkpoint:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0 # Fetch all history for diffs
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          
+      - name: Run Checkpoint Agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python main.py
+          
+      - name: Commit Checkpoint
+        run: |
+          git config --global user.name 'Checkpoint Agent'
+          git config --global user.email 'agent@codecheckpoint.local'
+          git add checkpoints/
+          git commit -m "docs: generate code checkpoint for ${{ github.sha }}" || echo "No changes to commit"
+          git push origin HEAD:${{ github.ref }}

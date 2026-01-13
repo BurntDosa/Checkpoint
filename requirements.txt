@@ -1,0 +1,7 @@
+langgraph
+dspy-ai
+google-genai
+chromadb
+gitpython
+pydantic
+python-dotenv
