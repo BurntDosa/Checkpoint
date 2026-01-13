@@ -37,3 +37,22 @@ def get_commit_metadata(commit_hash: str, repo_path: str = ".") -> dict:
         "date": commit.committed_datetime.isoformat(),
         "message": commit.message.strip()
     }
+
+def get_last_commit_by_author(email: str, repo_path: str = ".") -> Optional[dict]:
+    """Finds the last commit metadata for a specific author email."""
+    repo = get_repo(repo_path)
+    # Search entire history
+    for commit in repo.iter_commits():
+        if commit.author.email == email:
+            return {
+                "hash": commit.hexsha,
+                "date": commit.committed_datetime, # Keep as datetime object for comparison
+                "message": commit.message.strip()
+            }
+    return None
+
+def get_local_user_email(repo_path: str = ".") -> Optional[str]:
+    """Retrieves the email of the current local git user."""
+    repo = get_repo(repo_path)
+    reader = repo.config_reader()
+    return reader.get_value("user", "email", default=None)

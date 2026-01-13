@@ -50,4 +50,49 @@ class CheckpointGenerator(dspy.Module):
             technical_details=diff_analysis.technical_details
         )
         
+        
         return markdown_output
+
+# --- New Agents for Advanced Workflows ---
+
+class CatchupSummarizer(dspy.Signature):
+    """
+    Synthesizes multiple past checkpoints into a single personalized summary for a returning developer.
+    Focuses on "While You Were Gone" changes, new dependencies, and refactors.
+    """
+    checkpoints_content = dspy.InputField(desc="The content of multiple markdown checkpoints created since the user's last work.")
+    user_last_active_date = dspy.InputField(desc="The date the user was last active.")
+    
+    summary_markdown = dspy.OutputField(desc="A concise markdown summary titled 'While You Were Gone'. Sections: Changes Summary, New Dependencies, Refactors, Current Focus.")
+
+class CatchupGenerator(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.summarizer = dspy.ChainOfThought(CatchupSummarizer)
+    
+    def forward(self, checkpoints_content, user_last_active_date):
+        return self.summarizer(
+            checkpoints_content=checkpoints_content,
+            user_last_active_date=user_last_active_date
+        )
+
+class OnboardingSynthesizer(dspy.Signature):
+    """
+    Generates a 'Master Context' document for a new developer (The Map).
+    Explains architecture, key decisions, gotchas, and dependencies basically telling the 'Story' of the codebase.
+    """
+    file_structure = dspy.InputField(desc="The file tree structure of the repository.")
+    recent_checkpoints = dspy.InputField(desc="Recent high-level checkpoints to understand history.")
+    
+    master_markdown = dspy.OutputField(desc="A comprehensive guide. Sections: Architectural Overview, Key Decision Log, Gotchas & Tech Debt, Dependency Map.")
+
+class MasterContextGenerator(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.synthesizer = dspy.ChainOfThought(OnboardingSynthesizer)
+        
+    def forward(self, file_structure, recent_checkpoints):
+        return self.synthesizer(
+            file_structure=file_structure,
+            recent_checkpoints=recent_checkpoints
+        )

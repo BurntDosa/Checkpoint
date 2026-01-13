@@ -29,3 +29,65 @@ def list_checkpoints():
     if not os.path.exists(CHECKPOINT_DIR):
         return []
     return sorted(list(Path(CHECKPOINT_DIR).glob("*.md")))
+
+def get_checkpoints_since(since_date: datetime.datetime) -> list[str]:
+    """
+    Returns the content of all checkpoints created after the given date.
+    Files are named YYYY-MM-DD-hash.md, but we should rely on file creation time or git date 
+    if strictly needed. However, relying on filename date (YYYY-MM-DD) is decent for day-granularity.
+    
+    Better approach: Read file stats or metadata.
+    """
+    checkpoints = list_checkpoints()
+    active_checkpoints = []
+    
+    for cp in checkpoints:
+        # Extract date from filename: YYYY-MM-DD
+        try:
+            date_part = cp.name[:10]
+            cp_date = datetime.datetime.strptime(date_part, "%Y-%m-%d")
+            # Make cp_date timezone aware if needed, or naive. 
+            # basic comparison: if cp_date >= date (ignoring time for filename based)
+            # But the user might have committed at 10 AM and checkpoint at 11 AM same day.
+            
+            # Since filename only has day, this is imprecise.
+            # Let's rely on file modification time? No, git checkout changes that.
+            # We should probably store full timestamp in file or filenames.
+            
+            # For this MVP, we will perform a loose check: Checkpoints strictly AFTER the commit date.
+            
+            # Fix: Compare dates. 
+            # Note: since_date from git is timezone aware.
+            # Convert both to simple date for comparison or handle TZ.
+            
+            if cp_date.date() >= since_date.date():
+                with open(cp, "r") as f:
+                    active_checkpoints.append(f.read())
+        except Exception:
+            continue
+            
+    return active_checkpoints
+
+def save_master_context(content: str) -> str:
+    """Overwrites the MASTER_CONTEXT.md file in the root directory."""
+    filename = "MASTER_CONTEXT.md" # Root level
+    # Assuming we want it in the repo root, which is parent of CHECKPOINT_DIR usually?
+    # Actually CHECKPOINT_DIR is just "checkpoints".
+    # Let's save it in the current working dir (repo root)
+    file_path = filename
+    
+    with open(file_path, "w") as f:
+        f.write(content)
+    return os.path.abspath(file_path)
+
+def save_catchup(content: str, email: str) -> str:
+    """Overwrites the user's catchup file in the checkpoints directory."""
+    ensure_checkpoint_dir()
+    # Sanitize email
+    safe_email = email.replace("@", "_at_").replace(".", "_")
+    filename = f"catchup_{safe_email}.md"
+    file_path = os.path.join(CHECKPOINT_DIR, filename)
+    
+    with open(file_path, "w") as f:
+        f.write(content)
+    return os.path.abspath(file_path)
