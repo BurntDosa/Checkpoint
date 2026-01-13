@@ -30,7 +30,7 @@ jobs:
         run: |
           pip install -r requirements.txt
           
-      - name: Run Checkpoint Agent & Update Master Context
+      - name: Run Checkpoint Agent & Update Contexts
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
@@ -39,6 +39,9 @@ jobs:
           
           # 2. Update Master Context (The Map)
           python main.py --onboard
+
+          # 3. Update All User Catchups (The News Feed)
+          python main.py --catchup-all
           
       - name: Commit Checkpoint & Context
         run: |
@@ -46,5 +49,5 @@ jobs:
           git config --global user.email 'agent@codecheckpoint.local'
           git add checkpoints/
           git add MASTER_CONTEXT.md || echo "Master Context not changed"
-          git commit -m "docs: generate checkpoint & update master context for ${{ github.sha }}" || echo "No changes to commit"
+          git commit -m "docs: generate checkpoint, master context & catchups for ${{ github.sha }}" || echo "No changes to commit"
           git push origin HEAD:${{ github.ref }}

@@ -1,7 +1,7 @@
 import argparse
 import sys
 from src.graph import app
-from src.git_utils import get_diff, get_commit_metadata, get_current_commit_hash, get_last_commit_by_author
+from src.git_utils import get_diff, get_commit_metadata, get_current_commit_hash, get_last_commit_by_author, get_active_authors
 from src.agents import CatchupGenerator, MasterContextGenerator
 from src.storage import get_checkpoints_since, list_checkpoints, save_master_context, save_catchup
 from src.llm import configure_gemini
@@ -24,12 +24,41 @@ def get_file_tree(path="."):
     except Exception:
         return "File structure unavailable."
 
+def process_catchup(email):
+    """Helper to process catchup for a single email."""
+    print(f"Generating Catchup Summary for user: {email}")
+    last_commit = get_last_commit_by_author(email)
+    
+    if not last_commit:
+        print(f"  No commit history found for {email}. Skipping.")
+        return
+        
+    print(f"  Last active: {last_commit['date']} (Commit: {last_commit['hash'][:8]})")
+    
+    checkpoints = get_checkpoints_since(last_commit['date'])
+    if not checkpoints:
+        print("  No checkpoints found since last activity.")
+        # We might still want to generate a "You are up to date" file or just skip?
+        # Skipping is better to reduce API noise, but if we want the file to exist...
+        # Let's skip for now.
+        return
+        
+    combined_content = "\n\n".join(checkpoints)
+    
+    generator = CatchupGenerator()
+    result = generator(checkpoints_content=combined_content, user_last_active_date=str(last_commit['date']))
+    
+    username = last_commit['author']
+    filepath = save_catchup(result.summary_markdown, username)
+    print(f"  Checkpoints updated: {filepath}")
+
 def main():
     parser = argparse.ArgumentParser(description="Code Checkpoint Generator")
     parser.add_argument("--commit", help="Commit hash to analyze. Defaults to HEAD.", default=None)
     parser.add_argument("--dry-run", action="store_true", help="Print output instead of saving.")
     parser.add_argument("--onboard", action="store_true", help="Generate a Master Context map for new joinees.")
     parser.add_argument("--catchup", nargs='?', const=True, default=None, help="Generate a Catchup summary. If no email is provided, uses local git config user.email.")
+    parser.add_argument("--catchup-all", action="store_true", help="Generate Catchup summaries for ALL active developers.")
     
     args = parser.parse_args()
     
@@ -59,7 +88,18 @@ def main():
             print(f"Master Context updated: {filepath}")
             return
 
-        # MODE 2: CATCHUP (Returning Developer)
+        # MODE 2: CATCHUP ALL (Automated Pipeline)
+        if args.catchup_all:
+            print("Running Automated Catchup for ALL active developers...")
+            authors = get_active_authors()
+            for email in authors:
+                try:
+                    process_catchup(email)
+                except Exception as e:
+                    print(f"  Error processing {email}: {e}")
+            return
+
+        # MODE 3: CATCHUP SINGLE (Manual)
         if args.catchup:
             email = args.catchup
             
@@ -71,30 +111,10 @@ def main():
                     print("Error: Could not detect local git user.email. Please provide it: --catchup your@email.com")
                     return
             
-            print(f"Generating Catchup Summary for user: {email}")
-            last_commit = get_last_commit_by_author(email)
-            
-            if not last_commit:
-                print(f"No commit history found for {email}. Treating as a new user? Try --onboard.")
-                return
-                
-            print(f"Last active: {last_commit['date']} (Commit: {last_commit['hash'][:8]})")
-            
-            checkpoints = get_checkpoints_since(last_commit['date'])
-            if not checkpoints:
-                print("No checkpoints found since your last activity. You are up to date!")
-                return
-                
-            combined_content = "\n\n".join(checkpoints)
-            
-            generator = CatchupGenerator()
-            result = generator(checkpoints_content=combined_content, user_last_active_date=str(last_commit['date']))
-            
-            filepath = save_catchup(result.summary_markdown, email)
-            print(f"Catchup summary updated: {filepath}")
+            process_catchup(email)
             return
 
-        # MODE 3: STANDARD CHECKPOINT (Single Commit)
+        # MODE 4: STANDARD CHECKPOINT (Single Commit)
         commit_hash = args.commit if args.commit else get_current_commit_hash()
         print(f"Analyzing commit: {commit_hash}")
         

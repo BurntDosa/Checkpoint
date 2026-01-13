@@ -47,7 +47,8 @@ def get_last_commit_by_author(email: str, repo_path: str = ".") -> Optional[dict
             return {
                 "hash": commit.hexsha,
                 "date": commit.committed_datetime, # Keep as datetime object for comparison
-                "message": commit.message.strip()
+                "message": commit.message.strip(),
+                "author": commit.author.name
             }
     return None
 
@@ -56,3 +57,21 @@ def get_local_user_email(repo_path: str = ".") -> Optional[str]:
     repo = get_repo(repo_path)
     reader = repo.config_reader()
     return reader.get_value("user", "email", default=None)
+
+def get_active_authors(days: int = 60, repo_path: str = ".") -> list[str]:
+    """
+    Returns a list of unique emails of authors who have committed in the last N days.
+    """
+    repo = get_repo(repo_path)
+    # Calculate cutoff date
+    import datetime
+    cutoff_date = datetime.datetime.now() - datetime.timedelta(days=days)
+    
+    active_emails = set()
+    for commit in repo.iter_commits():
+        if commit.committed_datetime.replace(tzinfo=None) < cutoff_date:
+            break
+        if commit.author.email:
+            active_emails.add(commit.author.email)
+            
+    return list(active_emails)

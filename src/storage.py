@@ -25,14 +25,23 @@ def save_checkpoint(content: str, commit_hash: str) -> str:
     return os.path.abspath(file_path)
 
 def list_checkpoints():
-    """Lists all checkpoint files."""
+    """Lists all checkpoint files (standard commit checkpoints only)."""
     if not os.path.exists(CHECKPOINT_DIR):
         return []
-    return sorted(list(Path(CHECKPOINT_DIR).glob("*.md")))
+    # Filter for standard checkpoints: YYYY-MM-DD-hash.md
+    # Exclude Master Context and User Checkpoints
+    all_files = Path(CHECKPOINT_DIR).glob("*.md")
+    valid_checkpoints = []
+    for f in all_files:
+        if f.name.startswith("Checkpoint_") or f.name.startswith("catchup_") or f.name == "MASTER_CONTEXT.md":
+            continue
+        valid_checkpoints.append(f)
+        
+    return sorted(valid_checkpoints)
 
 def get_checkpoints_since(since_date: datetime.datetime) -> list[str]:
     """
-    Returns the content of all checkpoints created after the given date.
+    Returns the get_checkpoints_since of all checkpoints created after the given date.
     Files are named YYYY-MM-DD-hash.md, but we should rely on file creation time or git date 
     if strictly needed. However, relying on filename date (YYYY-MM-DD) is decent for day-granularity.
     
@@ -71,21 +80,18 @@ def get_checkpoints_since(since_date: datetime.datetime) -> list[str]:
 def save_master_context(content: str) -> str:
     """Overwrites the MASTER_CONTEXT.md file in the root directory."""
     filename = "MASTER_CONTEXT.md" # Root level
-    # Assuming we want it in the repo root, which is parent of CHECKPOINT_DIR usually?
-    # Actually CHECKPOINT_DIR is just "checkpoints".
-    # Let's save it in the current working dir (repo root)
     file_path = filename
     
     with open(file_path, "w") as f:
         f.write(content)
     return os.path.abspath(file_path)
 
-def save_catchup(content: str, email: str) -> str:
+def save_catchup(content: str, username: str) -> str:
     """Overwrites the user's catchup file in the checkpoints directory."""
     ensure_checkpoint_dir()
-    # Sanitize email
-    safe_email = email.replace("@", "_at_").replace(".", "_")
-    filename = f"catchup_{safe_email}.md"
+    # Sanitize username (replace spaces with _, remove weird chars)
+    safe_username = "".join([c if c.isalnum() else "_" for c in username])
+    filename = f"Checkpoint_{safe_username}.md"
     file_path = os.path.join(CHECKPOINT_DIR, filename)
     
     with open(file_path, "w") as f:
