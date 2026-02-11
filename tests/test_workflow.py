@@ -3,13 +3,13 @@ from unittest.mock import MagicMock, patch
 import os
 
 # Set dummy env var to pass initial import checks if any
-os.environ["GEMINI_API_KEY"] = "dummy_key"
+os.environ["MISTRAL_API_KEY"] = "dummy_key"
 
 from src.graph import app
 
 class TestCheckpointWorkflow(unittest.TestCase):
 
-    @patch("src.graph.configure_gemini")
+    @patch("src.graph.configure_mistral")
     @patch("src.graph.CheckpointGenerator")
     @patch("src.graph.save_checkpoint")
     @patch("src.graph.VectorDB")

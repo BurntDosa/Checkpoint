@@ -1,6 +1,7 @@
 langgraph
 dspy-ai
-google-genai
+mistralai
+httpx
 chromadb
 gitpython
 pydantic

@@ -1,6 +1,8 @@
 import git
 from typing import Optional
+from functools import lru_cache
 
+@lru_cache(maxsize=1)
 def get_repo(path: str = ".") -> git.Repo:
     return git.Repo(path, search_parent_directories=True)
 
@@ -58,20 +60,45 @@ def get_local_user_email(repo_path: str = ".") -> Optional[str]:
     reader = repo.config_reader()
     return reader.get_value("user", "email", default=None)
 
-def get_active_authors(days: int = 60, repo_path: str = ".") -> list[str]:
+def get_active_authors_with_last_commits(days: int = 60, repo_path: str = ".", max_count: int = 1000) -> dict[str, dict]:
     """
-    Returns a list of unique emails of authors who have committed in the last N days.
+    Single-pass optimization: Returns dict mapping email -> last commit info.
+    Replaces the O(n²) pattern of get_active_authors() + get_last_commit_by_author().
+    
+    Args:
+        days: Look back this many days
+        repo_path: Path to repository
+        max_count: Maximum commits to scan (limits history depth)
+    
+    Returns:
+        {email: {"hash": str, "date": datetime, "message": str, "author": str}}
     """
     repo = get_repo(repo_path)
-    # Calculate cutoff date
     import datetime
     cutoff_date = datetime.datetime.now() - datetime.timedelta(days=days)
     
-    active_emails = set()
-    for commit in repo.iter_commits():
+    author_map = {}
+    
+    for commit in repo.iter_commits(max_count=max_count):
         if commit.committed_datetime.replace(tzinfo=None) < cutoff_date:
             break
-        if commit.author.email:
-            active_emails.add(commit.author.email)
-            
-    return list(active_emails)
+        
+        email = commit.author.email
+        if email and email not in author_map:
+            # First time seeing this author = their most recent commit
+            author_map[email] = {
+                "hash": commit.hexsha,
+                "date": commit.committed_datetime,
+                "message": commit.message.strip(),
+                "author": commit.author.name
+            }
+    
+    return author_map
+
+def get_active_authors(days: int = 60, repo_path: str = ".") -> list[str]:
+    """
+    Returns a list of unique emails of authors who have committed in the last N days.
+    DEPRECATED: Use get_active_authors_with_last_commits() for better performance.
+    """
+    author_map = get_active_authors_with_last_commits(days, repo_path)
+    return list(author_map.keys())

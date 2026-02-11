@@ -28,7 +28,7 @@ A personalized "While You Were Gone" summary for **Returning Developers**.
 
 ### Prerequisites
 - Python 3.10+
-- Google Gemini API Key
+- Mistral API Key
 
 ### Setup
 1. Clone the repo.
@@ -38,7 +38,7 @@ A personalized "While You Were Gone" summary for **Returning Developers**.
    ```
 3. Set your API Key in a `.env` file:
    ```env
-   GEMINI_API_KEY=your_api_key_here
+   MISTRAL_API_KEY=your_api_key_here
    ```
 
 ### Commands
@@ -71,7 +71,7 @@ This project includes a GitHub Action (`.github/workflows/checkpoint.yml`) that 
 ├── src/
 │   ├── agents.py           # DSPy Agents (Generator, Synthesizer)
 │   ├── graph.py            # LangGraph Workflow
-│   ├── llm.py              # Gemini Provider & Configuration
+│   ├── llm.py              # Mistral Provider & Configuration
 │   ├── git_utils.py        # Git interactions
 │   └── storage.py          # File persistence
 ├── checkpoints/            # Storage for generated summaries

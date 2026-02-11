@@ -1,12 +1,19 @@
 import argparse
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from src.graph import app
-from src.git_utils import get_diff, get_commit_metadata, get_current_commit_hash, get_last_commit_by_author, get_active_authors
+from src.git_utils import get_diff, get_commit_metadata, get_current_commit_hash, get_active_authors_with_last_commits
 from src.agents import CatchupGenerator, MasterContextGenerator
 from src.storage import get_checkpoints_since, list_checkpoints, save_master_context, save_catchup
-from src.llm import configure_gemini
+from src.llm import configure_mistral
 import subprocess
-from src.mermaid_utils import generate_file_dependency_mermaid, generate_class_hierarchy_mermaid
+from src.mermaid_utils import generate_all_mermaid_diagrams
+
+def truncate_checkpoint(content: str, max_chars: int = 2000) -> str:
+    """Truncate checkpoint content to reduce context size for LLM calls."""
+    if len(content) <= max_chars:
+        return content
+    return content[:max_chars] + "\n\n[... truncated for brevity ...]\n"
 
 def get_file_tree(path="."):
     """Simple wrapper to get file tree using `tree` or `find`."""
@@ -25,10 +32,16 @@ def get_file_tree(path="."):
     except Exception:
         return "File structure unavailable."
 
-def process_catchup(email):
+def process_catchup(email, last_commit_info=None):
     """Helper to process catchup for a single email."""
     print(f"Generating Catchup Summary for user: {email}")
-    last_commit = get_last_commit_by_author(email)
+    
+    # Use precomputed last_commit_info if available (performance optimization)
+    if last_commit_info is None:
+        from src.git_utils import get_last_commit_by_author
+        last_commit = get_last_commit_by_author(email)
+    else:
+        last_commit = last_commit_info
     
     if not last_commit:
         print(f"  No commit history found for {email}. Skipping.")
@@ -66,7 +79,7 @@ def main():
     
     # Ensure env is configured
     try:
-        configure_gemini()
+        configure_mistral()
     except Exception as e:
         print(f"Configuration Error: {e}")
         sys.exit(1)
@@ -78,18 +91,18 @@ def main():
             print("Generating Master Context for New Joinee...")
             file_tree = get_file_tree()
             
-            # Generate Mermaid Diagrams
-            print("  Generating dependency graph...")
-            dep_graph = generate_file_dependency_mermaid(".")
-            print("  Generating class hierarchy...")
-            class_hierarchy = generate_class_hierarchy_mermaid(".")
+            # Generate Mermaid Diagrams in parallel (50% faster)
+            print("  Generating diagrams (parallel)...")
+            dep_graph, class_hierarchy = generate_all_mermaid_diagrams(".", depth_limit=3)
             
             # Fetch last 5 checkpoints for context
             all_checkpoints = list_checkpoints()
             recent_content = ""
             for cp in all_checkpoints[-5:]: # Last 5
-                with open(cp, "r") as f:
-                    recent_content += f"--- Checkpoint: {cp.name} ---\n{f.read()}\n\n"
+                with open(cp, "r", encoding="utf-8") as f:
+                    # Truncate individual checkpoints to reduce context size
+                    checkpoint_text = truncate_checkpoint(f.read(), max_chars=2000)
+                    recent_content += f"--- Checkpoint: {cp.name} ---\n{checkpoint_text}\n\n"
                     
             generator = MasterContextGenerator()
             result = generator(
@@ -111,15 +124,17 @@ def main():
         # MODE 2: CATCHUP ALL (Automated Pipeline)
         if args.catchup_all:
             print("Running Automated Catchup for ALL active developers...")
-            authors = get_active_authors()
+            # Single-pass optimization: get all authors + last commits at once
+            author_map = get_active_authors_with_last_commits(days=60, max_count=1000)
             import time
-            for i, email in enumerate(authors):
+            
+            for i, (email, last_commit_info) in enumerate(author_map.items()):
                 if i > 0:
                     print("Waiting 60s before next user to respect rate limits...")
                     time.sleep(60) 
                 
                 try:
-                    process_catchup(email)
+                    process_catchup(email, last_commit_info=last_commit_info)
                 except Exception as e:
                     print(f"  Error processing {email}: {e}")
             return

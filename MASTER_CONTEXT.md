@@ -1,59 +1,139 @@
-# The Master Context: Repository Intelligence System
+# Master Context: AI-Powered Documentation System
 
 ## Architectural Overview
-This system is designed to reduce developer cognitive load by automatically documenting codebase evolution and providing structured onboarding paths. It operates through three primary modes:
-
-1.  **Checkpointing**: Captures atomic changes and historical context.
-2.  **Onboarding (`--onboard`)**: Generates and updates this `MASTER_CONTEXT.md` file by analyzing the file tree and historical checkpoints.
-3.  **Catch-up (`--catchup`)**: Aggregates changes over a specific timeframe to summarize activity for returning developers.
-
 ### Core Components
--   **Entry Point (`main.py`)**: A CLI-based interface managing state validation and mode selection.
--   **Agent Layer (`src/agents.py`)**: Utilizes a modular LLM framework (DSPy patterns) where "Signatures" define task intent and "Modules" handle the execution of summaries and synthesis.
--   **Workflow Engine (`src/graph.py`)**: Likely uses a directed graph (e.g., LangGraph) to orchestrate the flow of data between agents and storage.
--   **Intelligence Layer (`src/llm.py` & `src/vector_db.py`)**: Manages interactions with LLM providers (specifically Google Gemini) and local vector embeddings for retrieval-augmented context.
--   **Utility Layer (`src/git_utils.py` & `src/storage.py`)**: Interfaces with the local Git environment and manages the file-based persistence of checkpoints.
+1. **CLI Entry Point (`main.py`)**
+   - Commands: `--onboard` (generates `MASTER_CONTEXT.md`), `--catchup` (summarizes changes).
+   - Integrates with system tools (`tree`, `git`) and Mermaid.js for visualization.
 
----
+2. **Agent Layer (`src/agents.py`)**
+   - **Onboarding**: `MasterContextGenerator` + `OnboardingSynthesizer` → Creates high-level docs.
+   - **Catchup**: `CatchupSummarizer` + `CatchupGenerator` → Summarizes Git history.
+   - **Design Pattern**: Uses `Signature` (interfaces) and `Module` (implementations) for extensibility.
+
+3. **LLM Integration (`src/llm.py`)**
+   - Self-healing retry logic (3 attempts) for rate limits (429 errors).
+   - **Tradeoff**: 35-second sleep improves success rate but adds latency.
+
+4. **Visualization (`src/mermaid_utils.py`)**
+   - Auto-generates:
+     - **Dependency Graphs**: File-level imports (e.g., `main → agents`).
+     - **Class Hierarchies**: Inheritance trees (e.g., `LM <|-- MistralLM`).
+
+5. **Data Management (`src/storage.py`)**
+   - **Git Integration**: Auto-commits `MASTER_CONTEXT.md` with checkpoints.
+   - **Exclusions**: `.chroma_db/` ignored (requires manual bootstrap).
+
+### Key Workflows
+1. **Onboarding Flow**:
+   ```mermaid
+   flowchart TD
+       A[main.py --onboard] --> B[get_file_tree]
+       B --> C[mermaid_utils.generate_diagrams]
+       C --> D[MasterContextGenerator]
+       D --> E[MASTER_CONTEXT.md]
+       E --> F[git add/commit]
+   ```
+
+2. **Catchup Flow**:
+   ```mermaid
+   flowchart TD
+       A[main.py --catchup] --> B[get_checkpoints_since]
+       B --> C[CatchupSummarizer]
+       C --> D[CatchupGenerator]
+       D --> E[CATCHUP.md]
+   ```
 
 ## Key Decision Log
-
-### 1. Documentation-as-Code (Jan 2026)
-**Decision**: Integrate `MASTER_CONTEXT.md` generation directly into the automated checkpoint workflow.
-**Reasoning**: Manual documentation inevitably rots. By making the high-level "Map" a generated artifact, we ensure that new developers and AI agents always have an accurate representation of the repository.
-
-### 2. Resilience over Latency (Jan 2026)
-**Decision**: Implement a 35-second synchronous sleep upon encountering `RESOURCE_EXHAUSTED` (429) errors from the Gemini API.
-**Reasoning**: In automation pipelines, a delayed success is significantly better than a fast failure that breaks the CI/CD or local workflow.
-
-### 3. Separation of Logic and Persistence (Jan 2026)
-**Decision**: Purge `.chroma_db` binary files from version control and add them to `.gitignore`.
-**Reasoning**: Tracking binary database files caused repository bloat and merge conflicts. The system now requires an explicit bootstrap/ingestion step, treating the vector store as a local cache rather than a source of truth.
-
----
+| Date               | Decision                          | Rationale                                                                 |
+|--------------------|-----------------------------------|---------------------------------------------------------------------------|
+| 2026-01-13         | Agent Layer Introduction          | Separate context synthesis from core logic for modularity.               |
+| 2026-01-13         | Rate Limit Retry Logic            | Reduce manual intervention for LLM failures (tradeoff: +35s latency).    |
+| 2026-02-10         | Mermaid Integration               | Visualize dependencies/hierarchies to reduce cognitive load.            |
+| 2026-02-10         | Auto-Commit `MASTER_CONTEXT.md`   | Keep docs in sync with code via Git workflows.                          |
+| 2026-01-13         | Remove `.chroma_db` from Git      | Avoid binary bloat; enforce explicit data initialization.               |
 
 ## Gotchas & Tech Debt
+1. **Critical Path Risks**:
+   - If `MasterContextGenerator` fails, the **entire checkpoint workflow halts**.
+   - **Mitigation**: Add fallback to generate a minimal `MASTER_CONTEXT.md` with error details.
 
-### 1. Synchronous Rate Limiting
-The 35-second sleep in `src/llm.py` is blocking. While reliable for single-user CLI runs, it will bottleneck the system if multiple agents are parallelized or if the system is moved to a multi-user web backend.
+2. **Performance**:
+   - **LLM Rate Limits**: 35-second sleep may block pipelines. Consider async retries.
+   - **Mermaid Generation**: Parsing large codebases with `ast` could be slow. Cache results.
 
-### 2. System Tool Dependency
-The `get_file_tree` utility relies on the system-level `tree` or `find` commands. Windows environments or minimal Docker containers without these utilities will fail.
+3. **Data Initialization**:
+   - New environments **must run a bootstrap script** to populate `.chroma_db/`.
+   - **Solution**: Add a `setup.py` to automate this step.
 
-### 3. Date-Based File Filtering
-Storage retrieval relies heavily on a `YYYY-MM-DD` naming convention for checkpoints. If a checkpoint file is renamed or the format is altered, the `catchup` and `onboard` logic may miss historical context.
-
----
+4. **Dependency Coupling**:
+   - `mod_graph` is heavily depended upon by `agents`, `llm`, and `storage`.
+   - **Refactor Target**: Split into smaller modules (e.g., `mod_graph/agents`, `mod_graph/llm`).
 
 ## Dependency Map
+### File Dependencies
+```mermaid
+graph TD
+    main --> agents
+    main --> git_utils
+    main --> llm
+    main --> mermaid_utils
+    main --> mod_graph
+    main --> storage
+    mod_graph --> agents
+    mod_graph --> llm
+    mod_graph --> storage
+    mod_graph --> vector_db
+    test_mermaid_utils --> mermaid_utils
+    test_workflow --> mod_graph
+```
 
-### External Dependencies
--   **LLM Provider**: Google Generative AI (Gemini Pro).
--   **Vector DB**: ChromaDB (Local persistence).
--   **Environment**: Git CLI must be configured with a local user email.
+### Class Hierarchy
+```mermaid
+classDiagram
+    LM <|-- MistralLM
+    Module <|-- CatchupGenerator
+    Module <|-- CheckpointGenerator
+    Module <|-- LegacyCheckpointGenerator
+    Module <|-- MasterContextGenerator
+    Signature <|-- CatchupSummarizer
+    Signature <|-- ContextAnalyzer
+    Signature <|-- DiffReader
+    Signature <|-- MarkdownWriter
+    Signature <|-- OnboardingSynthesizer
+    Signature <|-- UnifiedCheckpointSignature
+    TestCase <|-- TestCheckpointWorkflow
+    TestCase <|-- TestMermaidUtils
+    TypedDict <|-- GraphState
+```
 
-### Internal Module Flow
-1.  **CLI (`main.py`)** calls the **Workflow (`src/graph.py`)**.
-2.  **Workflow** fetches context via **Git Utils** and **Storage**.
-3.  **Agents (`src/agents.py`)** process the raw data using **LLM (`src/llm.py`)**.
-4.  **Results** are persisted back via **Storage** and staged via **Git Utils**.
+### Data Flow
+```mermaid
+flowchart LR
+    Git[Git History] --> A[CatchupSummarizer]
+    Files[File Tree] --> B[Mermaid Utils]
+    A --> C[MasterContextGenerator]
+    B --> C
+    C --> D[MASTER_CONTEXT.md]
+    D --> E[Git Commit]
+```
+
+## Setup Guide
+1. **Prerequisites**:
+   ```bash
+   pip install -r requirements.txt  # Includes mermaid-cli, chromadb
+   ```
+
+2. **First-Time Setup**:
+   ```bash
+   python setup.py  # Initializes .chroma_db/ and validates dependencies
+   ```
+
+3. **Generate Docs**:
+   ```bash
+   python main.py --onboard  # Creates MASTER_CONTEXT.md
+   python main.py --catchup --since 2026-01-01  # Summarizes changes
+   ```
+
+4. **View Diagrams**:
+   - Render Mermaid blocks using [Mermaid Live Editor](https://mermaid.live/).

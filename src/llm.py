@@ -1,101 +1,112 @@
 import os
 import dspy
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
-
+from mistralai import Mistral
 import time
+import httpx
 
-class GeminiLM(dspy.LM):
+class MistralLM(dspy.LM):
     """
-    Custom DSPy provider for Google's new genai SDK.
+    Custom DSPy provider for Mistral AI API.
     """
     def __init__(self, model, api_key=None, **kwargs):
         super().__init__(model)
-        self.client = genai.Client(api_key=api_key)
+        
+        # Create httpx client with SSL verification disabled for corporate proxies (Zscaler, etc.)
+        # For production environments, consider using proper certificate configuration instead
+        http_client = httpx.Client(verify=False)
+        
+        # Pass httpx.Client as 'client' parameter
+        self.client = Mistral(api_key=api_key, client=http_client)
         self.kwargs = kwargs
 
-    def basic_request(self, prompt: str, **kwargs):
+    def basic_request(self, prompt=None, **kwargs):
         """
         Basic request method required by DSPy.
         """
-        messages = kwargs.pop("messages", None)
-        valid_config_keys = [
-            'temperature', 'top_p', 'top_k', 'candidate_count', 
-            'max_output_tokens', 'stop_sequences', 'response_mime_type'
-        ]
-        config_args = {k: v for k, v in {**self.kwargs, **kwargs}.items() if k in valid_config_keys}
-        config = types.GenerateContentConfig(**config_args)
+        # Ensure prompt is never None
+        if not prompt:
+            prompt = ""
         
-        final_contents = prompt
-        if not final_contents and messages:
-            final_contents = str(messages)
-
+        # Convert prompt to OpenAI-style messages format
+        messages = [{"role": "user", "content": str(prompt)}]
+        
+        # Map parameters to Mistral API
+        temperature = kwargs.get("temperature", self.kwargs.get("temperature", 0.7))
+        max_tokens = kwargs.get("max_tokens", self.kwargs.get("max_tokens", 2000))
+        top_p = kwargs.get("top_p", self.kwargs.get("top_p", 1.0))
+        
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                response = self.client.models.generate_content(
+                response = self.client.chat.complete(
                     model=self.model,
-                    contents=final_contents,
-                    config=config
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    top_p=top_p
                 )
-                if response.text:
-                    return [response.text]
+                
+                if response.choices and len(response.choices) > 0:
+                    content = response.choices[0].message.content
+                    if content:
+                        return [content]
                 return [""]
             except Exception as e:
-                if "RESOURCE_EXHAUSTED" in str(e) or "429" in str(e):
-                    # Simple exponential backoff or 35s wait as suggested by error
-                    print(f"Rate limit hit. Waiting 35s before retry {attempt+1}/{max_retries}...")
-                    time.sleep(35) 
+                error_str = str(e)
+                # Check for rate limit errors
+                if "rate_limit" in error_str.lower() or "429" in error_str or "quota" in error_str.lower():
+                    wait_time = 35 * (attempt + 1)  # Exponential backoff
+                    print(f"Rate limit hit. Waiting {wait_time}s before retry {attempt+1}/{max_retries}...")
+                    time.sleep(wait_time)
                     continue
-                print(f"Error calling Gemini: {e}")
+                print(f"Error calling Mistral: {e}")
                 return [""]
         return [""]
 
-    def __call__(self, **kwargs):
+    def __call__(self, prompt=None, **kwargs):
         """
         Call method for DSPy LM.
-        DSPy passes inputs as keyword arguments. We need to construct the prompt from them.
-        Usually, dspy passes 'prompt' if it's a simple string, or other fields.
+        Supports both:
+        - String prompt: lm("text", temperature=0.7)
+        - Messages format: lm(messages=[{"role": "user", "content": "text"}])
         """
-        # If 'prompt' is in kwargs, use it. Otherwise, we might need to join other inputs.
-        # But commonly for ChainOfThought, it constructs a prompt string and passes it as 'prompt' or implicit arg?
-        # Actually dspy LMs are called with `lm(prompt, ...)` usually.
-        # Let's check the error: "GeminiLM.__call__() missing 1 required positional argument: 'prompt'"
-        # This means dspy is calling it as `lm(prompt, ...)` but my definition was `def __call__(self, prompt, **kwargs)`.
-        # Wait, if I defined it as `def __call__(self, prompt, **kwargs)`, why did it fail?
-        # Maybe dspy creates a "signature" based call?
-        
-        # NOTE: In dspy 2.5+, the base LM class might have a different signature or usage.
-        # Let's look at standard dspy.Google implementation logic (mentally).
-        # It seems I need to be careful about strict signature.
-        
-        # Let's simply print what we get to debug if I could, but here I must fix it.
-        # If the error is "missing 1 required positional", it implies the caller did NOT pass 'prompt' as positional.
-        # So dspy might be calling `lm(prompt=...)` or just `lm(...)` without positional prompt.
-        
-        prompt = kwargs.get("prompt")
-        if not prompt:
-            # If no prompt, try to join all string values in kwargs?
-            # Or maybe the first arg was missed.
-            pass
-        return self.basic_request(prompt, **kwargs)
+        # Handle both prompt and messages formats
+        if prompt is not None:
+            # String prompt format
+            return self.basic_request(prompt=prompt, **kwargs)
+        elif "messages" in kwargs:
+            # Messages format - convert to string prompt
+            messages = kwargs.pop("messages")
+            prompt_text = self._format_messages_to_prompt(messages)
+            return self.basic_request(prompt=prompt_text, **kwargs)
+        else:
+            # No prompt provided
+            return [""]
+    
+    def _format_messages_to_prompt(self, messages):
+        """Convert messages format to a single prompt string."""
+        prompt_parts = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = msg.get("content", "")
+            if role == "system":
+                prompt_parts.append(f"System: {content}")
+            elif role == "user":
+                prompt_parts.append(f"User: {content}")
+            elif role == "assistant":
+                prompt_parts.append(f"Assistant: {content}")
+        return "\n".join(prompt_parts)
 
-def configure_gemini():
-    """Configures the Gemini API client using key from environment."""
+def configure_mistral():
+    """Configures the Mistral API client using key from environment."""
     load_dotenv()
     
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("MISTRAL_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY environment variable is not set. Please add it to a .env file.")
+        raise ValueError("MISTRAL_API_KEY environment variable is not set. Please add it to a .env file.")
     
-    # Configure dspy to use our custom Gemini provider
-    # Using gemini-3-flash-preview as requested
-    lm = GeminiLM("gemini-3-flash-preview", api_key=api_key)
+    # Configure dspy to use Mistral provider
+    # Using mistral-medium-2508 as specified
+    lm = MistralLM("mistral-medium-2508", api_key=api_key)
     dspy.settings.configure(lm=lm)
-
-def get_model():
-    """Returns a configured Gemini client instance."""
-    # This might be deprecated depending on usage, but returning client as modern equivalent
-    api_key = os.getenv("GEMINI_API_KEY")
-    return genai.Client(api_key=api_key)
