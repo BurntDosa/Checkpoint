@@ -1,22 +1,21 @@
-# While You Were Gone
+# While You Were Gone (2026-01-13 → Present)
 
-### Changes Summary
-- **AI-Driven Onboarding & Catch-up:** Introduced a new "Agent Layer" that generates automated repository maps and historical change summaries. You can now use `python main.py --onboard` to create a `MASTER_CONTEXT.md` or `--catchup` to synthesize recent changes.
-- **Automated Documentation Sync:** The `MASTER_CONTEXT.md` is now automatically regenerated and committed during the checkpoint workflow, ensuring documentation stays in sync with code changes.
-- **Enhanced LLM Resilience:** Implemented a self-healing retry mechanism in `src/llm.py`. The system now gracefully handles `RESOURCE_EXHAUSTED` (429) errors by waiting 35 seconds before retrying.
-- **Data Hygiene:** Removed `.chroma_db` binary files and SQLite databases from version control. These are now ignored via `.gitignore` to prevent repository bloat and merge conflicts.
+## Changes Summary
+- **CLI Expansion**: Added `--onboard` and `--catchup` commands to `main.py` for AI-driven project summaries.
+- **Agent Layer**: New modules (`CatchupSummarizer`, `OnboardingSynthesizer`) synthesize repository context and changes.
+- **Git Integration**: Automated user activity detection (`get_last_commit_by_author`) and context updates in workflows.
+- **Storage**: Enhanced checkpoint filtering (`get_checkpoints_since`) and added persistence for `MASTER_CONTEXT.md`.
 
-### New Dependencies
-- **System Utilities:** The system now relies on the local `tree` or `find` commands to generate file structure context.
-- **Git Metadata:** Increased dependency on local Git configurations (email and commit history) for personalized summaries.
-- **Environment Bootstrapping:** Since local database files were removed, new setups now require an explicit ingestion process to populate the local vector store.
+## New Dependencies
+- **System Tools**: `tree`/`find` (for file tree generation).
+- **Environment Coupling**: Tighter Git metadata reliance (e.g., `get_local_user_email`).
 
-### Refactors
-- **CLI Entry Point (`main.py`):** Added robust state validation and null-checks for workflow outputs to prevent crashes.
-- **Storage Logic (`src/storage.py`):** Enhanced retrieval logic to filter checkpoints using a `YYYY-MM-DD` naming convention.
-- **Provider Layer:** Simplified configuration management in `GeminiLM` and centralized transient error recovery.
+## Refactors
+- **Error Handling**: Retry logic (3 attempts) and rate-limit recovery (35s sleep) in `GeminiLM.basic_request`.
+- **Data Hygiene**: Removed ChromaDB binary files from version control; added `.chroma_db/` to `.gitignore`.
+- **Workflow**: Renamed steps to reflect combined checkpoint + context updates (e.g., "Commit Checkpoint & Context").
 
-### Current Focus
-- **Workflow Stability:** Ensuring the `main.py --onboard` command remains stable as it is now a critical path in the automated checkpoint pipeline.
-- **Context Accuracy:** Refining the `MasterContextGenerator` to ensure high-fidelity repository maps.
-- **Developer Experience:** Reducing cognitive load for new contributors through the synthesized "Master Context" document.
+## Current Focus
+1. **Master Context Synchronization**: Auto-updating `MASTER_CONTEXT.md` via `--onboard` in CI/CD.
+2. **Resilience**: Self-healing LLM layer and state validation in `main.py`.
+3. **Repository Health**: Enforcing separation of logic/persistence (e.g., ChromaDB initialization now explicit).

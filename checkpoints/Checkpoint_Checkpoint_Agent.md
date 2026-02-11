@@ -1,20 +1,33 @@
-# While You Were Gone
+# While You Were Gone (Since 2026-01-13)
 
-### Changes Summary
-*   **AI Onboarding & Catch-up System**: Launched a new suite of tools to reduce cognitive load. You can now run `python main.py --onboard` to generate a repository map or `--catchup` to synthesize recent changes based on your last activity date.
-*   **Automated Master Context**: The project now maintains a `MASTER_CONTEXT.md` file, which is automatically updated and committed during the checkpoint process. This serves as the "source of truth" for AI agents and new contributors.
-*   **Resilience Layer**: Improved stability by adding a 3-attempt retry mechanism for LLM calls and specific handling for `RESOURCE_EXHAUSTED` (429) errors, including a mandatory 35-second cooldown period.
-*   **Database Cleanup**: Removed `.chroma_db` binary files and SQLite databases from the repository history and added them to `.gitignore`. Local environments now require an ingestion bootstrap.
+---
 
-### New Dependencies
-*   **System Utilities**: The system now relies on local `tree` or `find` commands to generate file tree structures.
-*   **Git Metadata**: Enhanced coupling with local Git configurations (`git config user.email`) to personalize "catch-up" summaries.
+## Changes Summary
+- **AI-Driven Onboarding**: Added `--onboard` and `--catchup` CLI commands to auto-generate repository maps and change summaries.
+- **Agent Layer**: Introduced `CatchupSummarizer` and `MasterContextGenerator` to synthesize historical changes and structural context.
+- **Git Integration**: Automated user activity detection (`get_last_commit_by_author`) and personalized summaries via local Git configs.
+- **Storage Overhaul**: Enhanced `src/storage.py` to handle heterogeneous data (checkpoints, summaries, maps) with `YYYY-MM-DD` filtering.
 
-### Refactors
-*   **Agent Layer Implementation**: Created `src/agents.py` containing specialized modules: `CatchupGenerator`, `OnboardingSynthesizer`, and `MasterContextGenerator`.
-*   **LLM Provider Logic**: Refactored `src/llm.py` to move error recovery and configuration cleanup out of the main execution flow.
-*   **Input Validation**: Added strict null-checks and state verification in `main.py` following workflow invocations.
+---
 
-### Current Focus
-*   **Stability of the Onboarding Pipeline**: Ensuring the `--onboard` command remains performant as it is now a critical path in the automated workflow.
-*   **Data Lifecycle Management**: Shifting toward environment-specific bootstrap processes since local vector stores are no longer tracked.
+## New Dependencies
+- **System Tools**: `tree`/`find` for file structure context (used in `get_file_tree`).
+- **Git Metadata**: Local user email/config now required for personalized catch-up summaries.
+- **Removed**: ChromaDB binary files (`.chroma_db/`) excluded from version control; added to `.gitignore`.
+
+---
+
+## Refactors
+- **Reliability**:
+  - Added retry logic (3 attempts) and 35-second sleep for `RESOURCE_EXHAUSTED` (429) errors in `src/llm.py`.
+  - Null-checks for `final_state` in `main.py` to prevent crashes.
+- **Architectural Cleanup**:
+  - Removed obsolete ChromaDB binaries (`chroma.sqlite3`, `*.bin` files).
+  - Refactored workflow to auto-update `MASTER_CONTEXT.md` during checkpoints.
+
+---
+
+## Current Focus
+- **Documentation-as-Code**: `MASTER_CONTEXT.md` is now version-controlled and auto-generated via `main.py --onboard`.
+- **Pipeline Stability**: The `--onboard` workflow is a critical path for checkpoint automation.
+- **Error Resilience**: Self-healing logic in the LLM layer reduces manual intervention.
