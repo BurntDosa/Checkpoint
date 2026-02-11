@@ -1,23 +1,20 @@
 # While You Were Gone
 
 ### Changes Summary
-*   **AI Catch-up & Onboarding**: Added new CLI commands `--onboard` and `--catchup` to generate repository maps and synthesized activity summaries.
-*   **Automated Documentation**: The system now automatically regenerates and commits `MASTER_CONTEXT.md` during the checkpoint process, ensuring high-level docs never drift from the implementation.
-*   **Resilience Upgrades**: Implemented a self-healing mechanism in the LLM layer with a 3-attempt retry logic and a specific 35-second back-off for `RESOURCE_EXHAUSTED` errors.
-*   **Git Metadata Integration**: Added utilities to retrieve local user emails and last commit dates to personalize "Catch-up" summaries.
-*   **Data Cleanup**: Purged `.chroma_db` binary files and SQLite databases from the repository history to prevent bloat and merge conflicts.
+*   **AI Onboarding & Catch-up System**: Launched a new suite of tools to reduce cognitive load. You can now run `python main.py --onboard` to generate a repository map or `--catchup` to synthesize recent changes based on your last activity date.
+*   **Automated Master Context**: The project now maintains a `MASTER_CONTEXT.md` file, which is automatically updated and committed during the checkpoint process. This serves as the "source of truth" for AI agents and new contributors.
+*   **Resilience Layer**: Improved stability by adding a 3-attempt retry mechanism for LLM calls and specific handling for `RESOURCE_EXHAUSTED` (429) errors, including a mandatory 35-second cooldown period.
+*   **Database Cleanup**: Removed `.chroma_db` binary files and SQLite databases from the repository history and added them to `.gitignore`. Local environments now require an ingestion bootstrap.
 
 ### New Dependencies
-*   **System Utilities**: The onboarding logic now depends on the availability of system-level `tree` or `find` commands.
-*   **Environment Metadata**: Tighter coupling with local Git configuration for author detection and history filtering.
-*   **Vector Store Lifecycle**: ChromaDB is now a local-only dependency; new environments require a manual bootstrap/ingestion step as data is no longer tracked in Git.
+*   **System Utilities**: The system now relies on local `tree` or `find` commands to generate file tree structures.
+*   **Git Metadata**: Enhanced coupling with local Git configurations (`git config user.email`) to personalize "catch-up" summaries.
 
 ### Refactors
-*   **Agent Layer Introduction**: Established `src/agents.py` containing `CatchupGenerator` and `MasterContextGenerator` to separate synthesis logic from core execution.
-*   **Storage Logic**: Enhanced `src/storage.py` to handle heterogeneous data types (checkpoints vs. summaries) and filter by date-based naming conventions.
-*   **CLI Validation**: Refactored `main.py` to include robust null-checks on workflow states and validated local variables for dry-run outputs.
+*   **Agent Layer Implementation**: Created `src/agents.py` containing specialized modules: `CatchupGenerator`, `OnboardingSynthesizer`, and `MasterContextGenerator`.
+*   **LLM Provider Logic**: Refactored `src/llm.py` to move error recovery and configuration cleanup out of the main execution flow.
+*   **Input Validation**: Added strict null-checks and state verification in `main.py` following workflow invocations.
 
 ### Current Focus
-*   **Architectural Visibility**: Transitioning the project toward a "documentation-as-code" model where the LLM maintains its own context.
-*   **Reliability**: Monitoring the impact of the new 35-second synchronous sleep on total execution time during high-load periods.
-*   **Pipeline Stability**: Ensuring the `main.py --onboard` command remains performant, as it is now a critical path for successful workflow completion.
+*   **Stability of the Onboarding Pipeline**: Ensuring the `--onboard` command remains performant as it is now a critical path in the automated workflow.
+*   **Data Lifecycle Management**: Shifting toward environment-specific bootstrap processes since local vector stores are no longer tracked.
