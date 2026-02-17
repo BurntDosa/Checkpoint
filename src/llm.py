@@ -1,112 +1,133 @@
+"""LLM configuration using LiteLLM for universal provider support."""
 import os
 import dspy
 from dotenv import load_dotenv
-from mistralai import Mistral
-import time
+import litellm
 import httpx
 
-class MistralLM(dspy.LM):
-    """
-    Custom DSPy provider for Mistral AI API.
-    """
-    def __init__(self, model, api_key=None, **kwargs):
-        super().__init__(model)
-        
-        # Create httpx client with SSL verification disabled for corporate proxies (Zscaler, etc.)
-        # For production environments, consider using proper certificate configuration instead
-        http_client = httpx.Client(verify=False)
-        
-        # Pass httpx.Client as 'client' parameter
-        self.client = Mistral(api_key=api_key, client=http_client)
-        self.kwargs = kwargs
 
-    def basic_request(self, prompt=None, **kwargs):
-        """
-        Basic request method required by DSPy.
-        """
-        # Ensure prompt is never None
-        if not prompt:
-            prompt = ""
-        
-        # Convert prompt to OpenAI-style messages format
-        messages = [{"role": "user", "content": str(prompt)}]
-        
-        # Map parameters to Mistral API
-        temperature = kwargs.get("temperature", self.kwargs.get("temperature", 0.7))
-        max_tokens = kwargs.get("max_tokens", self.kwargs.get("max_tokens", 2000))
-        top_p = kwargs.get("top_p", self.kwargs.get("top_p", 1.0))
-        
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                response = self.client.chat.complete(
-                    model=self.model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    top_p=top_p
-                )
-                
-                if response.choices and len(response.choices) > 0:
-                    content = response.choices[0].message.content
-                    if content:
-                        return [content]
-                return [""]
-            except Exception as e:
-                error_str = str(e)
-                # Check for rate limit errors
-                if "rate_limit" in error_str.lower() or "429" in error_str or "quota" in error_str.lower():
-                    wait_time = 35 * (attempt + 1)  # Exponential backoff
-                    print(f"Rate limit hit. Waiting {wait_time}s before retry {attempt+1}/{max_retries}...")
-                    time.sleep(wait_time)
-                    continue
-                print(f"Error calling Mistral: {e}")
-                return [""]
-        return [""]
-
-    def __call__(self, prompt=None, **kwargs):
-        """
-        Call method for DSPy LM.
-        Supports both:
-        - String prompt: lm("text", temperature=0.7)
-        - Messages format: lm(messages=[{"role": "user", "content": "text"}])
-        """
-        # Handle both prompt and messages formats
-        if prompt is not None:
-            # String prompt format
-            return self.basic_request(prompt=prompt, **kwargs)
-        elif "messages" in kwargs:
-            # Messages format - convert to string prompt
-            messages = kwargs.pop("messages")
-            prompt_text = self._format_messages_to_prompt(messages)
-            return self.basic_request(prompt=prompt_text, **kwargs)
-        else:
-            # No prompt provided
-            return [""]
+def configure_llm(model: str = None, api_key: str = None, temperature: float = 0.7, 
+                  max_tokens: int = 2000, **kwargs):
+    """
+    Configure LLM using LiteLLM for universal provider support.
     
-    def _format_messages_to_prompt(self, messages):
-        """Convert messages format to a single prompt string."""
-        prompt_parts = []
-        for msg in messages:
-            role = msg.get("role", "user")
-            content = msg.get("content", "")
-            if role == "system":
-                prompt_parts.append(f"System: {content}")
-            elif role == "user":
-                prompt_parts.append(f"User: {content}")
-            elif role == "assistant":
-                prompt_parts.append(f"Assistant: {content}")
-        return "\n".join(prompt_parts)
-
-def configure_mistral():
-    """Configures the Mistral API client using key from environment."""
+    Supports OpenAI, Anthropic, Mistral, Azure, Ollama, and 100+ other providers.
+    
+    Args:
+        model: Model name (e.g., "gpt-4", "claude-3-opus", "mistral-medium-2508")
+        api_key: API key (optional, will try to load from environment)
+        temperature: Temperature for generation (0.0-2.0)
+        max_tokens: Maximum tokens to generate
+        **kwargs: Additional parameters for LiteLLM
+        
+    Model naming examples:
+        - "gpt-4" → OpenAI (needs OPENAI_API_KEY)
+        - "claude-3-opus-20240229" → Anthropic (needs ANTHROPIC_API_KEY)
+        - "mistral-medium-2508" → Mistral (needs MISTRAL_API_KEY)
+        - "ollama/llama3" → Local Ollama (no API key needed)
+    
+    Returns:
+        Configured DSPy LM instance
+    """
     load_dotenv()
     
+    # Use default model if not specified
+    if model is None:
+        model = os.getenv("LLM_MODEL", "gpt-4")
+    
+    # Set API key in environment if provided
+    if api_key:
+        provider = detect_provider_from_model(model)
+        set_provider_api_key(provider, api_key)
+    
+    # Ensure model has provider prefix for LiteLLM
+    # LiteLLM requires format like "mistral/model-name" for proper routing
+    if "/" not in model:
+        provider = detect_provider_from_model(model)
+        if provider != "openai":  # OpenAI models work without prefix
+            model = f"{provider}/{model}"
+    
+    # Disable SSL verification for corporate proxies (Zscaler, etc.)
+    # For production environments, consider using proper certificate configuration
+    litellm.client = httpx.Client(verify=False)
+    
+    # Configure LiteLLM settings
+    litellm.drop_params = True  # Drop unsupported params instead of erroring
+    litellm.set_verbose = False  # Reduce logging noise
+    
+    # Create DSPy LM instance with LiteLLM
+    # DSPy v2.0+ has native LiteLLM support
+    lm = dspy.LM(
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        **kwargs
+    )
+    
+    # Configure DSPy to use this LM
+    dspy.settings.configure(lm=lm)
+    
+    return lm
+
+
+def detect_provider_from_model(model: str) -> str:
+    """
+    Detect LLM provider from model name.
+    
+    Args:
+        model: Model name
+        
+    Returns:
+        Provider name (openai, anthropic, mistral, etc.)
+    """
+    model_lower = model.lower()
+    
+    if "gpt" in model_lower or "o1" in model_lower:
+        return "openai"
+    elif "claude" in model_lower:
+        return "anthropic"
+    elif "mistral" in model_lower:
+        return "mistral"
+    elif "gemini" in model_lower or "palm" in model_lower:
+        return "google"
+    elif "ollama/" in model_lower:
+        return "ollama"
+    elif "azure" in model_lower:
+        return "azure"
+    else:
+        # Default to openai for unknown models
+        return "openai"
+
+
+def set_provider_api_key(provider: str, api_key: str):
+    """
+    Set API key environment variable for a specific provider.
+    
+    Args:
+        provider: Provider name
+        api_key: API key value
+    """
+    provider_env_map = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "mistral": "MISTRAL_API_KEY",
+        "google": "GOOGLE_API_KEY",
+        "azure": "AZURE_API_KEY",
+        "ollama": None,  # Ollama doesn't need API key
+    }
+    
+    env_var = provider_env_map.get(provider.lower())
+    if env_var:
+        os.environ[env_var] = api_key
+
+
+def configure_mistral():
+    """
+    Legacy function for backward compatibility.
+    Configures Mistral using the new LiteLLM-based system.
+    """
     api_key = os.getenv("MISTRAL_API_KEY")
     if not api_key:
         raise ValueError("MISTRAL_API_KEY environment variable is not set. Please add it to a .env file.")
     
-    # Configure dspy to use Mistral provider
-    # Using mistral-medium-2508 as specified
-    lm = MistralLM("mistral-medium-2508", api_key=api_key)
-    dspy.settings.configure(lm=lm)
+    return configure_llm(model="mistral-medium-2508", api_key=api_key)

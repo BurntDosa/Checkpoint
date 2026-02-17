@@ -3,7 +3,6 @@ from concurrent.futures import ThreadPoolExecutor
 from langgraph.graph import StateGraph, END
 from src.agents import CheckpointGenerator
 from src.storage import save_checkpoint
-from src.vector_db import VectorDB
 from src.llm import configure_mistral
 import os
 
@@ -35,26 +34,32 @@ def save_output(state: GraphState):
     filepath = save_checkpoint(state["generated_markdown"], state["commit_hash"], author=author)
     return {"filepath": filepath}
 
-# Node: Indexing (async background task)
+# Node: Indexing (synchronous for reliability)
 def index_output(state: GraphState):
     """
-    Submit indexing to background thread - don't block workflow completion.
-    Removes 2-5s embedding time from critical path.
+    Index checkpoint in ChromaDB if vector_db feature is enabled.
+    Runs synchronously to ensure completion before program exit.
     """
-    def _do_indexing():
-        try:
-            db = VectorDB()
-            db.add_checkpoint(
-                checkpoint_id=state["commit_hash"],
-                content=state["generated_markdown"],
-                metadata=state["metadata"]
-            )
-        except Exception as e:
-            # Log errors but don't crash the workflow
-            print(f"Warning: Background indexing failed: {e}")
+    try:
+        # Lazy import to avoid loading ChromaDB unless needed
+        from src.config import load_config
+        config = load_config()
+        
+        # Only index if vector_db is enabled
+        if not config or not config.features.vector_db:
+            return state
+            
+        from src.vector_db import VectorDB
+        db = VectorDB()
+        db.add_checkpoint(
+            checkpoint_id=state["commit_hash"],
+            content=state["generated_markdown"],
+            metadata=state["metadata"]
+        )
+    except Exception as e:
+        # Log errors but don't crash the workflow
+        print(f"Warning: Indexing failed: {e}")
     
-    # Submit to background thread, don't wait
-    _indexing_executor.submit(_do_indexing)
     return state
 
 # Build the Graph

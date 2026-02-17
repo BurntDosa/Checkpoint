@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "checkpoint-agent"
+version = "1.0.0"
+description = "AI-powered developer onboarding and context recovery system for git repositories"
+authors = [
+    {name = "Code Checkpoint Team", email = "checkpoint@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+keywords = ["git", "ai", "onboarding", "documentation", "llm", "developer-tools"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Documentation",
+    "Topic :: Software Development :: Version Control :: Git",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "langgraph>=0.2.0",
+    "dspy-ai>=2.0.0",
+    "litellm>=1.0.0",
+    "httpx>=0.24.0",
+    "chromadb>=0.4.0",
+    "gitpython>=3.1.0",
+    "pydantic>=2.0.0",
+    "python-dotenv>=1.0.0",
+    "questionary>=2.0.0",
+    "pyyaml>=6.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[project.scripts]
+checkpoint = "checkpoint.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/checkpoint-agent/checkpoint"
+Documentation = "https://github.com/checkpoint-agent/checkpoint#readme"
+Repository = "https://github.com/checkpoint-agent/checkpoint"
+Issues = "https://github.com/checkpoint-agent/checkpoint/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "checkpoint*"]
+exclude = ["tests*", "checkpoints*", ".chroma_db*"]

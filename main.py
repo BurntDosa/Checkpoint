@@ -1,13 +1,11 @@
 import argparse
 import sys
-from concurrent.futures import ThreadPoolExecutor
-from src.graph import app
-from src.git_utils import get_diff, get_commit_metadata, get_current_commit_hash, get_active_authors_with_last_commits
-from src.agents import CatchupGenerator, MasterContextGenerator
-from src.storage import get_checkpoints_since, list_checkpoints, save_master_context, save_catchup
-from src.llm import configure_mistral
 import subprocess
-from src.mermaid_utils import generate_all_mermaid_diagrams
+from dotenv import load_dotenv
+from src.config import load_config
+
+# Load environment variables from .env file
+load_dotenv()
 
 def truncate_checkpoint(content: str, max_chars: int = 2000) -> str:
     """Truncate checkpoint content to reduce context size for LLM calls."""
@@ -32,8 +30,12 @@ def get_file_tree(path="."):
     except Exception:
         return "File structure unavailable."
 
-def process_catchup(email, last_commit_info=None):
+def process_catchup(email, config, last_commit_info=None):
     """Helper to process catchup for a single email."""
+    # Lazy imports to avoid loading heavy dependencies for setup commands
+    from src.agents import CatchupGenerator
+    from src.storage import get_checkpoints_since, save_catchup
+    
     print(f"Generating Catchup Summary for user: {email}")
     
     # Use precomputed last_commit_info if available (performance optimization)
@@ -64,36 +66,106 @@ def process_catchup(email, last_commit_info=None):
         return
 
     username = last_commit['author']
-    filepath = save_catchup(result.summary_markdown, username)
+    filepath = save_catchup(result.summary_markdown, username, config.repository.output_dir)
     print(f"  Checkpoints updated: {filepath}")
 
 def main():
-    parser = argparse.ArgumentParser(description="Code Checkpoint Generator")
+    parser = argparse.ArgumentParser(
+        description="Code Checkpoint - AI-powered git documentation and onboarding",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  checkpoint init                    # Run setup wizard
+  checkpoint --onboard               # Generate master context
+  checkpoint --catchup               # Generate your catchup summary  
+  checkpoint --commit abc123         # Analyze specific commit
+  checkpoint config                  # Show current configuration
+  checkpoint uninstall               # Remove git hook
+        """
+    )
+    
+    # Setup/config commands
+    parser.add_argument("--init", action="store_true", help="Run interactive setup wizard")
+    parser.add_argument("--config", action="store_true", help="Show current configuration")
+    parser.add_argument("--uninstall", action="store_true", help="Uninstall git hook")
+    parser.add_argument("--install-hook", action="store_true", help="Install git hook")
+    
+    # Analysis commands
     parser.add_argument("--commit", help="Commit hash to analyze. Defaults to HEAD.", default=None)
     parser.add_argument("--dry-run", action="store_true", help="Print output instead of saving.")
     parser.add_argument("--onboard", action="store_true", help="Generate a Master Context map for new joinees.")
     parser.add_argument("--catchup", nargs='?', const=True, default=None, help="Generate a Catchup summary. If no email is provided, uses local git config user.email.")
     parser.add_argument("--catchup-all", action="store_true", help="Generate Catchup summaries for ALL active developers.")
     
+    # Configuration file override
+    parser.add_argument("--config-file", default=".checkpoint.yaml", help="Path to configuration file")
+    
     args = parser.parse_args()
     
-    # Ensure env is configured
+    # Handle setup/config commands first (don't need LLM config)
+    if args.init:
+        from src.setup import run_setup_wizard
+        success = run_setup_wizard()
+        sys.exit(0 if success else 1)
+    
+    if args.config:
+        from src.setup import show_current_config
+        show_current_config()
+        sys.exit(0)
+    
+    if args.uninstall:
+        from src.git_hook_installer import uninstall_hook
+        success = uninstall_hook(".")
+        sys.exit(0 if success else 1)
+    
+    if args.install_hook:
+        from src.git_hook_installer import install_hook
+        # Load config to respect auto_catchup setting
+        config = load_config(args.config_file)
+        success = install_hook(".", auto_catchup=config.features.auto_catchup)
+        sys.exit(0 if success else 1)
+    
+    # Load configuration
+    config = load_config(args.config_file)
+    
+    # Configure LLM using config
     try:
-        configure_mistral()
+        from src.llm import configure_llm
+        configure_llm(
+            model=config.llm.model,
+            temperature=config.llm.temperature,
+            max_tokens=config.llm.max_tokens
+        )
     except Exception as e:
-        print(f"Configuration Error: {e}")
+        print(f"❌ LLM Configuration Error: {e}")
+        print("   Run 'checkpoint init' to configure.")
         sys.exit(1)
         
     try:
+        # Lazy imports for analysis operations (avoid loading for setup commands)
+        from src.agents import MasterContextGenerator
+        from src.storage import list_checkpoints, save_master_context
+        from src.mermaid_utils import generate_all_mermaid_diagrams
 
         # MODE 1: ONBOARDING (New Joinee)
         if args.onboard:
             print("Generating Master Context for New Joinee...")
             file_tree = get_file_tree()
             
-            # Generate Mermaid Diagrams in parallel (50% faster)
-            print("  Generating diagrams (parallel)...")
-            dep_graph, class_hierarchy = generate_all_mermaid_diagrams(".", depth_limit=3)
+            # Generate Mermaid Diagrams - choose method based on config
+            if config.features.diagrams:
+                from src.llm_diagrams import should_use_llm_diagrams, generate_diagrams_llm
+                
+                if should_use_llm_diagrams(config):
+                    print("  Generating diagrams using LLM (language-agnostic)...")
+                    dep_graph, class_hierarchy = generate_diagrams_llm(".", config.languages)
+                else:
+                    print("  Generating diagrams using AST parsing (Python)...")
+                    dep_graph, class_hierarchy = generate_all_mermaid_diagrams(".", depth_limit=3)
+            else:
+                print("  Skipping diagram generation (disabled in config)")
+                dep_graph = "Diagrams disabled in configuration"
+                class_hierarchy = "Diagrams disabled in configuration"
             
             # Fetch last 5 checkpoints for context
             all_checkpoints = list_checkpoints()
@@ -117,16 +189,18 @@ def main():
                 print("Error: Failed to generate Master Context (LLM returned None).")
                 return
 
-            filepath = save_master_context(result.master_markdown)
+            filepath = save_master_context(result.master_markdown, config.repository.master_context_file)
             print(f"Master Context updated: {filepath}")
             return
 
         # MODE 2: CATCHUP ALL (Automated Pipeline)
         if args.catchup_all:
+            from src.git_utils import get_active_authors_with_last_commits
+            import time
+            
             print("Running Automated Catchup for ALL active developers...")
             # Single-pass optimization: get all authors + last commits at once
             author_map = get_active_authors_with_last_commits(days=60, max_count=1000)
-            import time
             
             for i, (email, last_commit_info) in enumerate(author_map.items()):
                 if i > 0:
@@ -134,24 +208,25 @@ def main():
                     time.sleep(60) 
                 
                 try:
-                    process_catchup(email, last_commit_info=last_commit_info)
+                    process_catchup(email, config, last_commit_info=last_commit_info)
                 except Exception as e:
                     print(f"  Error processing {email}: {e}")
             return
 
         # MODE 3: CATCHUP SINGLE (Manual)
         if args.catchup:
+            from src.git_utils import get_local_user_email
+            
             email = args.catchup
             
             # Auto-detect if flag is used without arg (const=True)
             if email is True:
-                from src.git_utils import get_local_user_email
                 email = get_local_user_email()
                 if not email:
                     print("Error: Could not detect local git user.email. Please provide it: --catchup your@email.com")
                     return
             
-            process_catchup(email)
+            process_catchup(email, config)
             return
 
         # MODE 4: STANDARD CHECKPOINT (Single Commit) - OPTIONAL / DEPRECATED DEFAULT
@@ -159,7 +234,10 @@ def main():
         # For now, we only want targeted docs (Onboard / Catchup) or explicit commit analysis.
         
         if args.commit:
-             # If user explicitly asks for a commit analysis
+            from src.git_utils import get_diff, get_commit_metadata
+            from src.graph import app
+            
+            # If user explicitly asks for a commit analysis
             commit_hash = args.commit
             print(f"Analyzing commit: {commit_hash}")
             

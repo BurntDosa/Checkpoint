@@ -86,22 +86,45 @@ def get_checkpoints_since(since_date: datetime.datetime) -> list[str]:
     
     return [content for content in active_checkpoints if content]
 
-def save_master_context(content: str) -> str:
-    """Overwrites the MASTER_CONTEXT.md file in the root directory."""
-    filename = "MASTER_CONTEXT.md" # Root level
+def save_master_context(content: str, filename: str = "MASTER_CONTEXT.md") -> str:
+    """
+    Overwrites the MASTER_CONTEXT.md file (or custom filename) in the root directory.
+    
+    Args:
+        content: Markdown content to write
+        filename: Filename to use (from config or default)
+        
+    Returns:
+        Absolute path to saved file
+    """
     file_path = filename
     
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(content)
     return os.path.abspath(file_path)
 
-def save_catchup(content: str, username: str) -> str:
-    """Overwrites the user's catchup file in the checkpoints directory."""
-    ensure_checkpoint_dir()
+def save_catchup(content: str, username: str, checkpoint_dir: str = None) -> str:
+    """
+    Overwrites the user's catchup file in the checkpoints directory.
+    
+    Args:
+        content: Markdown content to write
+        username: Username from git
+        checkpoint_dir: Custom checkpoint directory (from config or default)
+        
+    Returns:
+        Absolute path to saved file
+    """
+    if checkpoint_dir is None:
+        checkpoint_dir = CHECKPOINT_DIR
+    
+    # Ensure directory exists
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    
     # Sanitize username (replace spaces with _, remove weird chars)
     safe_username = "".join([c if c.isalnum() else "_" for c in username])
     filename = f"Checkpoint_{safe_username}.md"
-    file_path = os.path.join(CHECKPOINT_DIR, filename)
+    file_path = os.path.join(checkpoint_dir, filename)
     
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(content)

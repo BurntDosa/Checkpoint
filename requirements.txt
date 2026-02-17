@@ -1,8 +1,10 @@
 langgraph
 dspy-ai
-mistralai
+litellm
 httpx
 chromadb
 gitpython
 pydantic
 python-dotenv
+questionary
+pyyaml
