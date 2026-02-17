@@ -1,0 +1,35 @@
+llm:
+  provider: mistral
+  model: mistral-medium-2508
+  temperature: 0.7
+  max_tokens: 2000
+  api_key_env: ''
+repository:
+  output_dir: ./checkpoints
+  master_context_file: MASTER_CONTEXT.md
+  vector_db_path: .chroma_db
+  ignore_patterns:
+  - node_modules
+  - venv
+  - .git
+  - build
+  - dist
+  - __pycache__
+  file_patterns:
+  - '**/*.py'
+  - '**/*.js'
+  - '**/*.ts'
+  - '**/*.java'
+  - '**/*.go'
+  - '**/*.rs'
+features:
+  git_hook: true
+  vector_db: true
+  diagrams: true
+  auto_catchup: true
+languages:
+- Python
+- JavaScript
+- C/C++
+- C
+- C++
