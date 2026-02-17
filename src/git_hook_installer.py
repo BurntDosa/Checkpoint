@@ -6,17 +6,27 @@ from pathlib import Path
 from typing import Optional
 
 
-def get_hook_template(auto_catchup: bool = False) -> str:
+def get_hook_template(auto_catchup: bool = False, repo_root: Optional[Path] = None) -> str:
     """
     Generate hook template based on configuration.
     
     Args:
         auto_catchup: Whether to auto-generate catchup summaries
+        repo_root: Repository root path for detecting dev mode
         
     Returns:
         Hook script content
     """
-    base_hook = """#!/bin/sh
+    # Detect if we're in development mode (main.py exists in repo root)
+    checkpoint_cmd = "checkpoint"
+    if repo_root and (repo_root / "main.py").exists():
+        # Development mode - use direct Python execution
+        venv_python = repo_root / ".venv" / "bin" / "python"
+        main_py = repo_root / "main.py"
+        if venv_python.exists() and main_py.exists():
+            checkpoint_cmd = f'"{venv_python}" "{main_py}"'
+    
+    base_hook = f"""#!/bin/sh
 # Code Checkpoint Auto-generated Hook
 # This hook generates checkpoints automatically after each commit
 
@@ -25,13 +35,13 @@ COMMIT_HASH=$(git rev-parse HEAD)
 
 # Run checkpoint in background to avoid blocking commit
 # Redirect output to log file
-checkpoint --commit "$COMMIT_HASH" >> .checkpoint.log 2>&1 &
+{checkpoint_cmd} --commit "$COMMIT_HASH" >> .checkpoint.log 2>&1 &
 """
     
     if auto_catchup:
-        base_hook += """
+        base_hook += f"""
 # Auto-generate catchup summaries for all active developers
-checkpoint --catchup-all >> .checkpoint.log 2>&1 &
+{checkpoint_cmd} --catchup-all >> .checkpoint.log 2>&1 &
 """
     
     return base_hook
@@ -154,14 +164,17 @@ def install_hook(repo_path: str = ".", force: bool = False, auto_catchup: bool =
     Returns:
         True if installation successful, False otherwise
     """
-    # Generate hook template based on config
-    hook_template = get_hook_template(auto_catchup)
-    
-    # Find git directory
+    # Find git directory first to get repo root
     git_dir = find_git_root(repo_path)
     if not git_dir:
         print("❌ Not a git repository. Run 'git init' first.")
         return False
+    
+    # Get repository root (parent of .git directory)
+    repo_root = git_dir.parent
+    
+    # Generate hook template based on config and repo root
+    hook_template = get_hook_template(auto_catchup, repo_root)
     
     hooks_dir = git_dir / "hooks"
     hook_path = hooks_dir / "post-commit"
