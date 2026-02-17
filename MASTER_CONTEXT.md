@@ -1,91 +1,137 @@
-# Master Context: AI-Driven Onboarding & Catch-Up System
+# Master Context: AI-Powered Onboarding System
 
-## Architectural Overview
-### Layers
-1. **CLI Interface** (`main.py`):
-   - Entry point for `--onboard` (generates `MASTER_CONTEXT.md`) and `--catchup` (summarizes changes).
-   - Integrates with system tools (e.g., `tree`, `git`) for context.
+## 🗺️ Architectural Overview
+
+### Core Purpose
+This repository automates the generation of **developer context**—reducing cognitive load during onboarding, context switching, or catching up after absences. It combines:
+- **Structural Analysis**: File trees, dependency graphs.
+- **Historical Synthesis**: Checkpoint-based change summaries.
+- **Visual Aids**: Auto-generated Mermaid diagrams.
+
+### High-Level Components
+```mermaid
+graph TD
+    A[CLI Entry] -->|--onboard| B[OnboardingSynthesizer]
+    A -->|--catchup| C[CatchupGenerator]
+    B --> D[Mermaid Diagrams]
+    B --> E[File Tree Analysis]
+    C --> F[Git History Parsing]
+    D & E & F --> G[MASTER_CONTEXT.md]
+```
+
+1. **CLI Layer** (`main.py`):
+   - Entry point with `--onboard` (generate full context) and `--catchup` (summarize changes since a date).
+   - Orchestrates workflows and validates outputs (e.g., checks for `generated_markdown` in final state).
 
 2. **Agent Layer** (`agents.py`):
-   - **Onboarding**: `MasterContextGenerator` synthesizes repository structure and history.
-   - **Catch-Up**: `CatchupSummarizer` aggregates changes by date/author.
+   - **Onboarding**: `MasterContextGenerator` combines file structure, checkpoints, and diagrams into `MASTER_CONTEXT.md`.
+   - **Catchup**: `CatchupGenerator` filters checkpoints by date (e.g., `get_checkpoints_since`) and synthesizes summaries.
 
-3. **Utility Layer**:
-   - `git_utils.py`: Git operations (e.g., `get_last_commit_by_author`).
-   - `mermaid_utils.py`: Generates dependency/class diagrams from code.
+3. **Data Layer**:
+   - **Git Utilities** (`git_utils.py`): Extracts author-specific history (e.g., `get_last_commit_by_author`).
+   - **Storage** (`storage.py`): Manages checkpoint persistence and retrieval.
+   - **Vector DB** (`vector_db.py`): *Excluded from Git*—used for semantic search during context generation.
 
-4. **Persistence Layer**:
-   - `storage.py`: Manages checkpoints and generated docs.
-   - `vector_db.py`: ChromaDB for embeddings (excluded from Git).
+4. **Visualization Layer** (`mermaid_utils.py`):
+   - Generates dependency graphs and class hierarchies from static code analysis (AST parsing).
+   - Example Outputs:
+     - Dependency Graph:
+       ```mermaid
+       graph TD
+           main --> agents
+           main --> llm_diagrams
+           llm_diagrams --> agents
+       ```
+     - Class Hierarchy:
+       ```mermaid
+       classDiagram
+           BaseModel <|-- CheckpointConfig
+           Module <|-- MasterContextGenerator
+       ```
 
-### Workflow
-1. **Onboarding**:
-   ```mermaid
-   graph LR
-     A[main.py --onboard] --> B[get_file_tree]
-     B --> C[MasterContextGenerator]
-     C --> D[MASTER_CONTEXT.md]
-   ```
-2. **Catch-Up**:
-   ```mermaid
-   graph LR
-     A[main.py --catchup] --> B[get_checkpoints_since]
-     B --> C[CatchupSummarizer]
-     C --> D[Catchup Report]
-   ```
+---
 
-## Key Decision Log
-| Decision               | Rationale                                                                 | Impact                          |
-|-------------------------|---------------------------------------------------------------------------|---------------------------------|
-| Auto-Generated `MASTER_CONTEXT.md` | Ensures docs stay in sync with code.                                     | Requires stable `--onboard` CLI. |
-| Mermaid Diagrams        | Visualizes dependencies/class hierarchies for clarity.                  | Adds parsing complexity.        |
-| ChromaDB Git Ignore     | Avoids binary bloat; enforces local setup.                                | New envs need manual DB init.   |
-| Rate-Limit Retries      | Improves LLM reliability (e.g., Gemini 429 errors).                      | Adds 35s delay on failures.    |
+## 📜 Key Decision Log
 
-## Gotchas & Tech Debt
-1. **Critical Path**:
-   - The `--onboard` command is now part of the checkpoint workflow. Failures block commits.
-   - **Mitigation**: Add validation in `main.py` to skip context generation if unstable.
+| Decision                          | Rationale                                                                 | Impact                                                                 |
+|-----------------------------------|---------------------------------------------------------------------------|-----------------------------------------------------------------------|
+| **Auto-update `MASTER_CONTEXT.md`** | Keep documentation in sync with code changes.                          | Adds dependency on `--onboard` success in CI/CD.                     |
+| **Mermaid Integration**           | Address gaps in textual descriptions for complex relationships.         | Increases onboarding time for large repos (AST parsing overhead).    |
+| **Rate-Limit Retries**            | Handle LLM API instability (e.g., Gemini 429 errors).                   | Adds 35-second delay per retry; improves success rate.               |
+| **Exclude `.chroma_db/` from Git** | Avoid binary bloat and merge conflicts.                                 | Requires explicit bootstrap for new environments.                     |
+| **Checkpoint Naming Convention**  | Use `YYYY-MM-DD-hash.md` for sortability and uniqueness.                 | Enables date-based filtering (e.g., `get_checkpoints_since`).        |
 
-2. **Data Initialization**:
-   - ChromaDB requires manual setup (`python -m src.vector_db --init`).
-   - **Mitigation**: Add a `setup.py` script to automate DB initialization.
+---
 
-3. **Circular Dependencies**:
-   - `mod_graph` imports `agents` and `storage`, risking tight coupling.
-   - **Mitigation**: Refactor to use dependency injection.
+## ⚠️ Gotchas & Tech Debt
 
-4. **Performance**:
-   - Rate-limit retries add latency. Consider async requests for parallel tasks.
+### Immediate Risks
+1. **Tight Coupling in Workflow**:
+   - The checkpoint automation *requires* `--onboard` to succeed. If context generation fails, the entire checkpoint is aborted.
+   - **Mitigation**: Decouple context generation from checkpoint commits (e.g., use a post-commit hook).
 
-## Dependency Map
+2. **Environment Assumptions**:
+   - Relies on Unix tools (`tree`, `find`) for file structure generation.
+   - **Workaround**: Add a fallback to Python-based directory traversal (e.g., `os.walk`).
+
+3. **Untested Core Logic**:
+   - `CatchupGenerator` and `MasterContextGenerator` lack unit tests.
+   - **Priority**: Add fixture-based tests for synthesis edge cases (e.g., empty checkpoints).
+
+### Long-Term Debt
+| Item                          | Description                                                                 | Priority |
+|-------------------------------|-----------------------------------------------------------------------------|----------|
+| **Circular Dependencies**     | `main.py` ↔ `agents.py` ↔ `llm_diagrams.py`.                              | High     |
+| **Diagram Performance**       | AST parsing may slow down for repos with 1000+ files.                     | Medium   |
+| **Windows Compatibility**     | CLI tools (`tree`, `find`) may not be available.                          | Low      |
+| **LLM Cost Monitoring**       | No tracking of token usage or API costs during context generation.        | Medium   |
+
+---
+
+## 🌐 Dependency Map
+
 ### File Dependencies
 ```mermaid
 graph TD
+    __main__ --> main
+    llm_diagrams --> agents
     main --> agents
+    main --> config
+    main --> git_hook_installer
     main --> git_utils
     main --> llm
+    main --> llm_diagrams
     main --> mermaid_utils
     main --> mod_graph
+    main --> setup
     main --> storage
     mod_graph --> agents
+    mod_graph --> config
     mod_graph --> llm
     mod_graph --> storage
     mod_graph --> vector_db
+    setup --> config
+    setup --> git_hook_installer
     test_mermaid_utils --> mermaid_utils
     test_workflow --> mod_graph
+    vector_db --> config
 ```
 
-### Class Hierarchy
+### Class Inheritance
 ```mermaid
 classDiagram
-    LM <|-- MistralLM
+    BaseModel <|-- CheckpointConfig
+    BaseModel <|-- FeaturesConfig
+    BaseModel <|-- LLMConfig
+    BaseModel <|-- RepositoryConfig
     Module <|-- CatchupGenerator
     Module <|-- CheckpointGenerator
+    Module <|-- LLMDiagramGenerator
     Module <|-- LegacyCheckpointGenerator
     Module <|-- MasterContextGenerator
     Signature <|-- CatchupSummarizer
     Signature <|-- ContextAnalyzer
+    Signature <|-- DiagramGeneratorSignature
     Signature <|-- DiffReader
     Signature <|-- MarkdownWriter
     Signature <|-- OnboardingSynthesizer
@@ -93,14 +139,3 @@ classDiagram
     TestCase <|-- TestCheckpointWorkflow
     TestCase <|-- TestMermaidUtils
     TypedDict <|-- GraphState
-```
-
-### Data Flow
-```mermaid
-graph LR
-  A[Git] -->|Commits| B[storage.py]
-  B -->|Checkpoints| C[agents.py]
-  C -->|Context| D[MASTER_CONTEXT.md]
-  E[Code] -->|AST| F[mermaid_utils.py]
-  F -->|Diagrams| D
-```
