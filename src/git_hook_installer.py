@@ -6,9 +6,9 @@ from pathlib import Path
 from typing import Optional
 
 
-def get_hook_template(auto_catchup: bool = False, repo_root: Optional[Path] = None) -> str:
+def get_prepush_hook_template(auto_catchup: bool = False, repo_root: Optional[Path] = None) -> str:
     """
-    Generate hook template based on configuration.
+    Generate pre-push hook template that generates checkpoints for commits being pushed.
     
     Args:
         auto_catchup: Whether to auto-generate catchup summaries
@@ -26,25 +26,55 @@ def get_hook_template(auto_catchup: bool = False, repo_root: Optional[Path] = No
         if venv_python.exists() and main_py.exists():
             checkpoint_cmd = f'"{venv_python}" "{main_py}"'
     
-    base_hook = f"""#!/bin/sh
-# Code Checkpoint Auto-generated Hook
-# This hook generates checkpoints automatically after each commit
+    hook = f"""#!/bin/sh
+# Code Checkpoint Auto-generated Pre-Push Hook
+# This hook generates checkpoints for commits being pushed
 
-# Get the commit hash
-COMMIT_HASH=$(git rev-parse HEAD)
-
-# Run checkpoint in background to avoid blocking commit
-# Redirect output to log file
-{checkpoint_cmd} --commit "$COMMIT_HASH" >> .checkpoint.log 2>&1 &
+# Read stdin (remote name and URL)
+while read local_ref local_sha remote_ref remote_sha
+do
+    if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+        # Branch is being deleted, skip
+        continue
+    fi
+    
+    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+        # New branch, get all commits
+        RANGE="$local_sha"
+    else
+        # Existing branch, get commits between remote and local
+        RANGE="$remote_sha..$local_sha"
+    fi
+    
+    # Get list of commits being pushed
+    COMMITS=$(git rev-list "$RANGE" 2>/dev/null)
+    
+    if [ -n "$COMMITS" ]; then
+        echo "Generating checkpoints for commits being pushed..."
+        
+        # Generate checkpoint for each commit
+        for commit in $COMMITS; do
+            echo "  Processing commit: $commit"
+            {checkpoint_cmd} --commit "$commit" >> .checkpoint.log 2>&1
+        done
+        
 """
     
     if auto_catchup:
-        base_hook += f"""
-# Auto-generate catchup summaries for all active developers
-{checkpoint_cmd} --catchup-all >> .checkpoint.log 2>&1 &
+        hook += f"""        # Generate catchup summaries
+        echo "Generating catchup summaries..."
+        {checkpoint_cmd} --catchup-all >> .checkpoint.log 2>&1
+        
 """
     
-    return base_hook
+    hook += """        echo "✅ Checkpoints generated successfully"
+    fi
+done
+
+exit 0
+"""
+    
+    return hook
 
 
 def find_git_root(start_path: str = ".") -> Optional[Path]:
@@ -151,10 +181,10 @@ def make_executable(file_path: Path) -> bool:
 
 def install_hook(repo_path: str = ".", force: bool = False, auto_catchup: bool = False) -> bool:
     """
-    Install post-commit git hook for automatic checkpoint generation.
+    Install pre-push git hook for automatic checkpoint generation.
     
-    Uses a composition pattern: if an existing hook is found, it's backed up
-    and the checkpoint command is appended to preserve existing functionality.
+    Checkpoints are generated only when commits are pushed, not on every local commit.
+    Uses a composition pattern: if an existing hook is found, it's backed up.
     
     Args:
         repo_path: Path to git repository
@@ -174,20 +204,20 @@ def install_hook(repo_path: str = ".", force: bool = False, auto_catchup: bool =
     repo_root = git_dir.parent
     
     # Generate hook template based on config and repo root
-    hook_template = get_hook_template(auto_catchup, repo_root)
+    hook_template = get_prepush_hook_template(auto_catchup, repo_root)
     
     hooks_dir = git_dir / "hooks"
-    hook_path = hooks_dir / "post-commit"
+    hook_path = hooks_dir / "pre-push"
     
     # Ensure hooks directory exists
     hooks_dir.mkdir(parents=True, exist_ok=True)
     
     # Check if existing hook exists
-    exists, existing_content = check_existing_hook(git_dir, "post-commit")
+    exists, existing_content = check_existing_hook(git_dir, "pre-push")
     
     if exists and existing_content:
         # Check if it's already our hook
-        if "Code Checkpoint Auto-generated Hook" in existing_content:
+        if "Code Checkpoint Auto-generated Pre-Push Hook" in existing_content:
             if not force:
                 print("✅ Checkpoint hook already installed.")
                 return True
@@ -199,7 +229,7 @@ def install_hook(repo_path: str = ".", force: bool = False, auto_catchup: bool =
             print(f"⚠️  Existing {hook_path.name} hook detected.")
             
             # Backup the existing hook
-            if not backup_existing_hook(git_dir, "post-commit"):
+            if not backup_existing_hook(git_dir, "pre-push"):
                 print("❌ Failed to backup existing hook. Aborting.")
                 return False
             
@@ -226,7 +256,7 @@ def install_hook(repo_path: str = ".", force: bool = False, auto_catchup: bool =
         try:
             with open(hook_path, 'w') as f:
                 f.write(hook_template)
-            print("✅ Installed checkpoint post-commit hook.")
+            print("✅ Installed checkpoint pre-push hook.")
         except Exception as e:
             print(f"❌ Error creating hook: {e}")
             return False
@@ -236,13 +266,16 @@ def install_hook(repo_path: str = ".", force: bool = False, auto_catchup: bool =
         return False
     
     print(f"✅ Hook installed at {hook_path}")
-    print("   Checkpoints will be generated automatically after each commit.")
+    print("   Checkpoints will be generated automatically when you push commits.")
+    if auto_catchup:
+        print("   📊 Auto-catchup enabled: summaries will be generated on each push")
     return True
 
 
 def uninstall_hook(repo_path: str = ".") -> bool:
     """
-    Uninstall post-commit git hook and restore backup if available.
+    Uninstall pre-push git hook and restore backup if available.
+    Also removes old post-commit hook if present.
     
     Args:
         repo_path: Path to git repository
@@ -256,12 +289,26 @@ def uninstall_hook(repo_path: str = ".") -> bool:
         print("❌ Not a git repository.")
         return False
     
-    hook_path = git_dir / "hooks" / "post-commit"
-    backup_path = git_dir / "hooks" / "post-commit.checkpoint-backup"
+    success = True
+    
+    # Remove pre-push hook
+    hook_path = git_dir / "hooks" / "pre-push"
+    backup_path = git_dir / "hooks" / "pre-push.checkpoint-backup"
     
     # Check if our hook is installed
     if not hook_path.exists():
-        print("✅ No checkpoint hook installed.")
+        print("ℹ️  No pre-push checkpoint hook installed.")
+        # Check for old post-commit hook
+        old_hook = git_dir / "hooks" / "post-commit"
+        if old_hook.exists():
+            try:
+                with open(old_hook, 'r') as f:
+                    content = f.read()
+                if "Code Checkpoint" in content:
+                    old_hook.unlink()
+                    print("✅ Removed old post-commit checkpoint hook.")
+            except Exception:
+                pass
         return True
     
     # Read current hook
@@ -291,11 +338,24 @@ def uninstall_hook(repo_path: str = ".") -> bool:
         # No backup, just remove our hook
         try:
             hook_path.unlink()
-            print("✅ Removed checkpoint hook.")
-            return True
+            print("✅ Removed checkpoint pre-push hook.")
         except Exception as e:
             print(f"❌ Error removing hook: {e}")
-            return False
+            success = False
+    
+    # Also remove old post-commit hook if it exists
+    old_hook = git_dir / "hooks" / "post-commit"
+    if old_hook.exists():
+        try:
+            with open(old_hook, 'r') as f:
+                content = f.read()
+            if "Code Checkpoint" in content:
+                old_hook.unlink()
+                print("✅ Removed old post-commit checkpoint hook.")
+        except Exception:
+            pass
+    
+    return success
 
 
 def check_hook_status(repo_path: str = ".") -> dict:
@@ -316,12 +376,15 @@ def check_hook_status(repo_path: str = ".") -> dict:
             "hook_installed": False,
             "hook_executable": False,
             "backup_exists": False,
+            "old_post_commit": False,
         }
     
-    hook_path = git_dir / "hooks" / "post-commit"
-    backup_path = git_dir / "hooks" / "post-commit.checkpoint-backup"
+    hook_path = git_dir / "hooks" / "pre-push"
+    backup_path = git_dir / "hooks" / "pre-push.checkpoint-backup"
+    old_hook_path = git_dir / "hooks" / "post-commit"
     
     hook_installed = False
+    old_post_commit = False
     hook_executable = False
     
     if hook_path.exists():
@@ -338,10 +401,20 @@ def check_hook_status(repo_path: str = ".") -> dict:
         except:
             pass
     
+    # Check for old post-commit hook
+    if old_hook_path.exists():
+        try:
+            with open(old_hook_path, 'r') as f:
+                content = f.read()
+            old_post_commit = "Code Checkpoint" in content
+        except:
+            pass
+    
     return {
         "is_git_repo": True,
         "hook_installed": hook_installed,
         "hook_executable": hook_executable,
         "backup_exists": backup_path.exists(),
+        "old_post_commit": old_post_commit,
         "hook_path": str(hook_path) if hook_path.exists() else None,
     }
