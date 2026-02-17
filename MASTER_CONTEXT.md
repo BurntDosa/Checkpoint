@@ -1,141 +1,97 @@
-# Master Context: AI-Powered Onboarding System
+# **Code Checkpoint: Master Context**
+*Your guide to the architecture, decisions, and quirks of the Code Checkpoint system.*
 
-## 🗺️ Architectural Overview
+---
 
-### Core Purpose
-This repository automates the generation of **developer context**—reducing cognitive load during onboarding, context switching, or catching up after absences. It combines:
-- **Structural Analysis**: File trees, dependency graphs.
-- **Historical Synthesis**: Checkpoint-based change summaries.
-- **Visual Aids**: Auto-generated Mermaid diagrams.
+## **🗺️ Architectural Overview**
+### **Purpose**
+Code Checkpoint is a **developer onboarding and context recovery tool** that:
+1. **Automatically generates** markdown checkpoints for code changes (via Git hooks).
+2. **Uses LLMs** to analyze diffs and explain changes in plain English.
+3. **Stores and indexes** checkpoints for semantic search (e.g., "Show me all changes by Alice last month").
+4. **Supports any programming language** (via Git diffs + LLM abstraction).
 
-### High-Level Components
+### **High-Level Workflow**
 ```mermaid
-graph TD
-    A[CLI Entry] -->|--onboard| B[OnboardingSynthesizer]
-    A -->|--catchup| C[CatchupGenerator]
-    B --> D[Mermaid Diagrams]
-    B --> E[File Tree Analysis]
-    C --> F[Git History Parsing]
-    D & E & F --> G[MASTER_CONTEXT.md]
+flowchart LR
+    A[Developer\ncommits code] -->|triggers| B[Git Hook]
+    B -->|runs| C[main.py]
+    C --> D[graph.py\nWorkflow Engine]
+    D --> E[git_utils.py\nFetch diff/metadata]
+    D --> F[agents.py\nLLM Analysis]
+    D --> G[storage.py\nSave Checkpoint]
+    D --> H[vector_db.py\nIndex for Search]
 ```
 
-1. **CLI Layer** (`main.py`):
-   - Entry point with `--onboard` (generate full context) and `--catchup` (summarize changes since a date).
-   - Orchestrates workflows and validates outputs (e.g., checks for `generated_markdown` in final state).
-
-2. **Agent Layer** (`agents.py`):
-   - **Onboarding**: `MasterContextGenerator` combines file structure, checkpoints, and diagrams into `MASTER_CONTEXT.md`.
-   - **Catchup**: `CatchupGenerator` filters checkpoints by date (e.g., `get_checkpoints_since`) and synthesizes summaries.
-
-3. **Data Layer**:
-   - **Git Utilities** (`git_utils.py`): Extracts author-specific history (e.g., `get_last_commit_by_author`).
-   - **Storage** (`storage.py`): Manages checkpoint persistence and retrieval.
-   - **Vector DB** (`vector_db.py`): *Excluded from Git*—used for semantic search during context generation.
-
-4. **Visualization Layer** (`mermaid_utils.py`):
-   - Generates dependency graphs and class hierarchies from static code analysis (AST parsing).
-   - Example Outputs:
-     - Dependency Graph:
-       ```mermaid
-       graph TD
-           main --> agents
-           main --> llm_diagrams
-           llm_diagrams --> agents
-       ```
-     - Class Hierarchy:
-       ```mermaid
-       classDiagram
-           BaseModel <|-- CheckpointConfig
-           Module <|-- MasterContextGenerator
-       ```
+### **Key Components**
+| Component               | File(s)               | Responsibility                                                                 |
+|-------------------------|-----------------------|-------------------------------------------------------------------------------|
+| **CLI**                 | `main.py`             | Entry point; routes commands (`--catchup`, `--commit`).                       |
+| **Workflow Engine**     | `graph.py`            | Orchestrates checkpoint generation (diff → LLM → storage → indexing).         |
+| **Git Hooks**           | `git_hook_installer.py` | Installs post-commit hooks; detects dev mode to run `main.py` directly.       |
+| **LLM Agents**          | `agents.py`, `llm.py` | Analyzes diffs using DSPy + LiteLLM (supports OpenAI/Mistral/etc.).            |
+| **Storage**             | `storage.py`          | Manages checkpoint files; handles legacy/new filename formats.                 |
+| **Vector DB**           | `vector_db.py`        | ChromaDB-based semantic search over checkpoints.                             |
+| **Configuration**       | `config.py`           | Pydantic models for settings (LLM provider, paths, feature flags).             |
+| **Setup Wizard**        | `setup.py`            | Interactive CLI for initial config (language detection, API keys).            |
 
 ---
 
-## 📜 Key Decision Log
+## **📜 Key Decision Log**
+### **1. Universal LLM Support (2026-02-17)**
+- **Problem**: Original Mistral-specific implementation limited flexibility.
+- **Solution**: Integrated **LiteLLM** to support OpenAI, Anthropic, Azure, Ollama, etc.
+- **Tradeoffs**:
+  - ✅ **Pros**: Future-proof; users can switch providers without code changes.
+  - ⚠️ **Cons**: Added dependency on `litelm`; API key management complexity.
+- **Files Affected**: `llm.py`, `config.py` (new `LLMProvider` enum).
 
-| Decision                          | Rationale                                                                 | Impact                                                                 |
-|-----------------------------------|---------------------------------------------------------------------------|-----------------------------------------------------------------------|
-| **Auto-update `MASTER_CONTEXT.md`** | Keep documentation in sync with code changes.                          | Adds dependency on `--onboard` success in CI/CD.                     |
-| **Mermaid Integration**           | Address gaps in textual descriptions for complex relationships.         | Increases onboarding time for large repos (AST parsing overhead).    |
-| **Rate-Limit Retries**            | Handle LLM API instability (e.g., Gemini 429 errors).                   | Adds 35-second delay per retry; improves success rate.               |
-| **Exclude `.chroma_db/` from Git** | Avoid binary bloat and merge conflicts.                                 | Requires explicit bootstrap for new environments.                     |
-| **Checkpoint Naming Convention**  | Use `YYYY-MM-DD-hash.md` for sortability and uniqueness.                 | Enables date-based filtering (e.g., `get_checkpoints_since`).        |
+### **2. Git Hook Development Mode (2026-02-17)**
+- **Problem**: Hooks required global `checkpoint` installation, blocking local dev.
+- **Solution**: Detect `.venv/bin/python` + `main.py` to run directly in dev mode.
+- **Impact**:
+  - **Backward Compatible**: Falls back to global `checkpoint` if not in dev mode.
+  - **Friction Reduced**: No need to reinstall after code changes.
+- **Code**:
+  ```python
+  # git_hook_installer.py
+  if (repo_root / "main.py").exists() and (repo_root / ".venv/bin/python").exists():
+      checkpoint_cmd = '.venv/bin/python main.py'
+  ```
 
----
+### **3. Metadata-Rich Checkpoint Filenames (2026-02-17)**
+- **Problem**: Legacy format (`YYYY-MM-DD-hash.md`) lacked context (e.g., author).
+- **Solution**: New format: `Checkpoint-Author-YYYY-MM-DD-hash.md`.
+- **Challenge**: Regex-based parsing to support both formats:
+  ```python
+  # storage.py
+  DATE_PATTERN = re.compile(r'(\d{4})-(\d{2})-(\d{2})')
+  ```
+- **Why It Matters**:
+  - Enables queries like "Show all checkpoints by Alice."
+  - No migration needed; old files still work.
 
-## ⚠️ Gotchas & Tech Debt
+### **4. Language-Agnostic Expansion**
+- **Problem**: Originally Python-specific (e.g., hardcoded `import` parsing).
+- **Solution**:
+  - Use **Git diffs** (language-agnostic) as input to LLMs.
+  - Added **language detection** in `setup.py` (via file extensions).
+- **Example**:
+  ```python
+  # setup.py
+  def detect_languages(repo_path):
+      extensions = {f.suffix for f in repo_path.glob("**/*.*")}
+      return {ext: LANGUAGE_MAP.get(ext, "unknown") for ext in extensions}
+  ```
 
-### Immediate Risks
-1. **Tight Coupling in Workflow**:
-   - The checkpoint automation *requires* `--onboard` to succeed. If context generation fails, the entire checkpoint is aborted.
-   - **Mitigation**: Decouple context generation from checkpoint commits (e.g., use a post-commit hook).
-
-2. **Environment Assumptions**:
-   - Relies on Unix tools (`tree`, `find`) for file structure generation.
-   - **Workaround**: Add a fallback to Python-based directory traversal (e.g., `os.walk`).
-
-3. **Untested Core Logic**:
-   - `CatchupGenerator` and `MasterContextGenerator` lack unit tests.
-   - **Priority**: Add fixture-based tests for synthesis edge cases (e.g., empty checkpoints).
-
-### Long-Term Debt
-| Item                          | Description                                                                 | Priority |
-|-------------------------------|-----------------------------------------------------------------------------|----------|
-| **Circular Dependencies**     | `main.py` ↔ `agents.py` ↔ `llm_diagrams.py`.                              | High     |
-| **Diagram Performance**       | AST parsing may slow down for repos with 1000+ files.                     | Medium   |
-| **Windows Compatibility**     | CLI tools (`tree`, `find`) may not be available.                          | Low      |
-| **LLM Cost Monitoring**       | No tracking of token usage or API costs during context generation.        | Medium   |
-
----
-
-## 🌐 Dependency Map
-
-### File Dependencies
-```mermaid
-graph TD
-    __main__ --> main
-    llm_diagrams --> agents
-    main --> agents
-    main --> config
-    main --> git_hook_installer
-    main --> git_utils
-    main --> llm
-    main --> llm_diagrams
-    main --> mermaid_utils
-    main --> mod_graph
-    main --> setup
-    main --> storage
-    mod_graph --> agents
-    mod_graph --> config
-    mod_graph --> llm
-    mod_graph --> storage
-    mod_graph --> vector_db
-    setup --> config
-    setup --> git_hook_installer
-    test_mermaid_utils --> mermaid_utils
-    test_workflow --> mod_graph
-    vector_db --> config
-```
-
-### Class Inheritance
-```mermaid
-classDiagram
-    BaseModel <|-- CheckpointConfig
-    BaseModel <|-- FeaturesConfig
-    BaseModel <|-- LLMConfig
-    BaseModel <|-- RepositoryConfig
-    Module <|-- CatchupGenerator
-    Module <|-- CheckpointGenerator
-    Module <|-- LLMDiagramGenerator
-    Module <|-- LegacyCheckpointGenerator
-    Module <|-- MasterContextGenerator
-    Signature <|-- CatchupSummarizer
-    Signature <|-- ContextAnalyzer
-    Signature <|-- DiagramGeneratorSignature
-    Signature <|-- DiffReader
-    Signature <|-- MarkdownWriter
-    Signature <|-- OnboardingSynthesizer
-    Signature <|-- UnifiedCheckpointSignature
-    TestCase <|-- TestCheckpointWorkflow
-    TestCase <|-- TestMermaidUtils
-    TypedDict <|-- GraphState
+### **5. Interactive Setup Wizard**
+- **Problem**: Manual config setup was error-prone.
+- **Solution**: `questionary`-based CLI with validation:
+  - Detects languages in the repo.
+  - Validates API keys for LLM providers.
+  - Writes to `.checkpoint.yaml`.
+- **Example Flow**:
+  ```
+  ? Select your LLM provider: [OpenAI/Mistral/Azure]
+  ? Enter your API key: ****
+  ? Enable automatic git hooks? (Y/n)
