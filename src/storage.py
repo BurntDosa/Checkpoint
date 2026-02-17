@@ -2,6 +2,7 @@ import os
 import datetime
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
+import re
 
 CHECKPOINT_DIR = "checkpoints"
 
@@ -55,22 +56,30 @@ def list_checkpoints():
 def get_checkpoints_since(since_date: datetime.datetime) -> list[str]:
     """
     Returns the content of all checkpoints created after the given date.
-    Files are named YYYY-MM-DD-hash.md, but we should rely on file creation time or git date 
-    if strictly needed. However, relying on filename date (YYYY-MM-DD) is decent for day-granularity.
+    Handles both naming formats:
+    - New: Checkpoint-Author-YYYY-MM-DD-hash.md
+    - Old: YYYY-MM-DD-hash.md
     
     Optimized with parallel file reading for better I/O performance.
     """
     checkpoints = list_checkpoints()
     
+    # Pattern to extract date (YYYY-MM-DD) from filename
+    date_pattern = re.compile(r'(\d{4})-(\d{2})-(\d{2})')
+    
     # Filter by date first (cheap operation)
     valid_checkpoints = []
     for cp in checkpoints:
         try:
-            date_part = cp.name[:10]
-            cp_date = datetime.datetime.strptime(date_part, "%Y-%m-%d")
-            if cp_date.date() >= since_date.date():
-                valid_checkpoints.append(cp)
-        except Exception:
+            filename = cp.name
+            match = date_pattern.search(filename)
+            if match:
+                date_str = match.group(0)  # e.g., "2026-02-17"
+                cp_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                if cp_date.date() >= since_date.date():
+                    valid_checkpoints.append(cp)
+        except Exception as e:
+            # print(f"  Debug: Failed to parse date from {cp.name}: {e}")
             continue
     
     # Parallel file reading with UTF-8 encoding
