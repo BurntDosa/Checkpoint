@@ -1,55 +1,53 @@
 # While You Were Gone (2026-02-11 → 2026-02-17)
 
 ## Changes Summary
-
-### 🔧 **Storage Layer**
-- **Regex-Based Date Parsing**: Replaced hardcoded string slicing with `re.compile(r'(\d{4})-(\d{2})-(\d{2})')` to support both legacy (`YYYY-MM-DD-hash.md`) and new (`Checkpoint-Author-YYYY-MM-DD-hash.md`) filename formats.
-- **Impact**: Future-proofs metadata (e.g., authorship) without breaking existing checkpoints.
-
-### 🔄 **Git Hooks**
-1. **Post-Commit → Pre-Push Migration**:
-   - Checkpoints now generate **only during `git push`** (not every commit), reducing local overhead.
-   - Example: `git commit -m "WIP"` no longer triggers checkpoints; they’re created on `git push`.
-2. **Dev Mode Support**:
-   - Hooks dynamically detect local development (via `.venv/bin/python` + `main.py`) and run without global installation.
+### 🔄 **Git Hook Overhaul**
+- **Migration**: Hooks moved from `post-commit` to **`pre-push`** (checkpoints now generated only on `git push`).
+- **Dev Mode**: Local testing no longer requires global installation—hooks auto-detect `.venv` and run `main.py` directly.
+- **Action Required**: Uninstall old hooks (`python -m git_hook_installer uninstall`) and install new ones.
 
 ### 🤖 **LLM Integration**
-- **Universal Provider Support**: Replaced Mistral-specific code with **LiteLLM**, enabling OpenAI, Anthropic, Azure, and Ollama.
-- **Configuration**: Centralized in `.checkpoint.yaml` (e.g., `provider: mistral`, `model: mistral-medium-2508`).
+- **Universal Support**: Replaced Mistral-specific code with **LiteLLM** (now supports OpenAI, Anthropic, Azure, Ollama, etc.).
+- **Configuration**: Centralized in `.checkpoint.yaml` (set `api_key_env` for your provider).
 
-### ⚙️ **Configuration**
-- **New File**: `.checkpoint.yaml` manages:
-  - LLM settings (API keys, models).
-  - Git hook patterns (ignores `node_modules`, `venv`).
-  - Vector DB (Chroma) and output paths (`./checkpoints`).
+### 📦 **CI/CD-Centric Workflow**
+- **GitHub Actions**: Checkpoints now generated in CI/CD (via `checkpoint.yml`) instead of locally.
+- **Granularity**: Per-commit processing (`--commit <hash>`) replaces bulk `--onboard` updates.
 
-## New Dependencies
-| Dependency      | Purpose                          |
-|-----------------|----------------------------------|
-| `litellm`       | Universal LLM provider interface |
-| `chromadb`      | Local vector embeddings storage  |
-| `pydantic`      | Configuration validation        |
-
-## Refactors
-1. **Storage Layer**:
-   - **Before**: `cp.name[:10]` (fragile string slicing).
-   - **After**: Regex-based parsing with graceful error handling.
-2. **Git Hooks**:
-   - **Before**: Global `checkpoint` command required.
-   - **After**: Dynamic command generation (`".venv/bin/python main.py"` in dev mode).
-
-## Current Focus
-1. **Testing**:
-   - Validate LiteLLM integrations across providers.
-   - Stress-test pre-push hooks with large commit ranges.
-2. **Documentation**:
-   - Update setup guides for `.checkpoint.yaml`.
-   - Add examples for multi-language workflows.
-3. **Expansion**:
-   - Add support for Go/Rust (currently Python/JS/C++/Java).
-   - Explore auto-generated architectural diagrams.
+### 🗃️ **Storage Layer**
+- **Metadata-Rich Filenames**: New format (`Checkpoint-Author-YYYY-MM-DD-hash.md`) supports authorship/project tags.
+- **Backward Compatibility**: Regex parsing handles both legacy and new formats.
 
 ---
-**Action Required**:
-- Uninstall old post-commit hooks: `python -m git_hook_installer uninstall`.
-- Configure `.checkpoint.yaml` (set `api_key_env` for LLM access).
+
+## New Dependencies
+| Component       | Purpose                          | Setup Instructions                     |
+|-----------------|----------------------------------|----------------------------------------|
+| **LiteLLM**     | Universal LLM provider interface | `pip install litellm`                   |
+| **Chroma DB**   | Vector embeddings for search      | Auto-initialized in `.chroma_db/`      |
+| **GitHub Actions** | CI/CD checkpoint generation   | Enable workflow in `.github/checkpoint.yml` |
+
+---
+
+## Refactors
+1. **`storage.py`**:
+   - Replaced hardcoded date slicing with regex (`r'(\d{4})-(\d{2})-(\d{2})'`).
+   - Skips malformed filenames gracefully.
+2. **`git_hook_installer.py`**:
+   - Dynamic command generation for dev mode (`.venv/bin/python main.py`).
+   - Cross-platform path handling.
+
+---
+
+## Current Focus
+### 🚀 **Next Steps**
+- **Testing**: Validate LiteLLM integrations and pre-push hook reliability.
+- **Documentation**: Update diagrams for new CI/CD workflows.
+- **Expansion**: Add language-specific features (e.g., JavaScript/TypeScript support).
+
+### ⚠️ **Breaking Changes**
+- Local checkpoints **no longer auto-generate** on commit (only on push).
+- Legacy `post-commit` hooks **must be uninstalled** to avoid conflicts.
+
+### 💡 **Pro Tip**
+Run `python -m git_hook_installer uninstall` to clean up old hooks before installing the new `pre-push` version.

@@ -1,48 +1,34 @@
 # While You Were Gone
 
 ## Changes Summary
-Since **2026-02-17**, the Code Checkpoint system has undergone significant architectural improvements to enhance flexibility, performance, and language support:
-
-- **Storage Layer**: Updated filename parsing to support metadata-rich formats (e.g., `Checkpoint-Jane-2026-02-17-abc123.md`) while maintaining backward compatibility.
 - **Git Hooks**:
-  - Migrated from **post-commit** to **pre-push** to reduce local development overhead.
-  - Added **development mode** for seamless local testing without global installations.
-- **LLM Integration**: Replaced Mistral-specific code with **LiteLLM**, enabling support for OpenAI, Anthropic, Azure, and others.
-- **Language Support**: Expanded beyond Python to include JavaScript, C/C++, Java, Go, and Rust.
-
----
+  - Migrated from `post-commit` to **`pre-push`** to reduce local overhead (checkpoints now generate only on `git push`).
+  - Added **development mode** support: hooks now run `main.py` directly in local repos (no global install needed).
+- **Storage Layer**:
+  - Filenames now support **metadata** (e.g., `Checkpoint-Jane-2026-02-17-abc123.md`) via regex parsing.
+  - Backward-compatible with legacy formats.
+- **LLM Integration**:
+  - Switched from Mistral to **LiteLLM** for multi-provider support (OpenAI, Anthropic, etc.).
+- **CI/CD**:
+  - Checkpoints are now generated in **GitHub Actions** (not locally), ensuring consistency.
 
 ## New Dependencies
-| Component       | Purpose                                                                 |
-|-----------------|-------------------------------------------------------------------------|
-| **LiteLLM**     | Universal LLM provider integration (replaces Mistral-specific code).  |
-| **Chroma DB**   | Local vector database for semantic search (stored in `.chroma_db`).    |
-| **Pydantic**    | Modular configuration management (e.g., `.checkpoint.yaml`).          |
-
----
+- **LiteLLM**: Universal LLM interface (replaces Mistral-specific code).
+- **Chroma DB**: Local vector database for semantic search (stored in `.chroma_db`).
+- **GitHub Actions**: Workflow (`checkpoint.yml`) for automated checkpoint generation on push.
 
 ## Refactors
-1. **Storage Layer**:
-   - Replaced hardcoded date parsing with regex to support flexible filename formats.
-   - Added graceful error handling for malformed filenames.
-2. **Git Hooks**:
-   - Dynamic command generation for dev/local environments.
-   - Pre-push hook logic to process commit ranges during `git push`.
+1. **`storage.py`**:
+   - Replaced hardcoded date slicing with regex to parse `YYYY-MM-DD` from filenames.
+   - Skips malformed files gracefully.
+2. **`git_hook_installer.py`**:
+   - Detects `.venv` and `main.py` to enable dev mode.
+   - Generates dynamic hook commands (e.g., `".venv/bin/python main.py --commit $HASH"`).
 3. **Configuration**:
-   - Centralized settings in `.checkpoint.yaml` (LLM, DB, git hooks, ignored paths).
-   - Interactive setup wizard for guided onboarding.
-
----
+   - Added `.checkpoint.yaml` for centralized settings (LLM, DB, git hooks).
+   - Interactive setup wizard for language detection and validation.
 
 ## Current Focus
-- **Testing**: Validate LLM provider integrations and git hook reliability.
-- **Documentation**: Update diagrams and examples for new workflows (e.g., pre-push hooks).
-- **Expansion**: Add language-specific features (e.g., diagram generation for JavaScript/TypeScript).
-
-**Action Required**:
-- Uninstall legacy post-commit hooks and install pre-push hooks:
-  ```bash
-  python -m git_hook_installer uninstall
-  python -m git_hook_installer install
-  ```
-- Configure `.checkpoint.yaml` for your LLM provider and repository paths.
+- **Testing**: Validate LLM providers and git hook reliability.
+- **Documentation**: Update diagrams for new workflows (e.g., pre-push hooks, CI/CD integration).
+- **Expansion**: Add support for more languages (beyond Python/JS) and LLM providers.
