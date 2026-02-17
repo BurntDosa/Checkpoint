@@ -1,11 +1,22 @@
 import argparse
 import sys
 import subprocess
+import os
 from dotenv import load_dotenv
-from src.config import load_config
+from src.config import load_config, get_api_key_for_provider
 
 # Load environment variables from .env file
 load_dotenv()
+
+def check_api_key(config):
+    """Check if API key is available for the configured provider."""
+    api_key = get_api_key_for_provider(config.llm.provider)
+    if not api_key:
+        print(f"⚠️  Warning: No API key found for provider '{config.llm.provider}'")
+        print(f"   Set the appropriate environment variable (e.g., MISTRAL_API_KEY, OPENAI_API_KEY)")
+        print(f"   Or create a .env file with your API key")
+        return False
+    return True
 
 def truncate_checkpoint(content: str, max_chars: int = 2000) -> str:
     """Truncate checkpoint content to reduce context size for LLM calls."""
@@ -129,6 +140,14 @@ Examples:
     config = load_config(args.config_file)
     
     # Configure LLM using config
+    # Check for API key before configuring LLM
+    if not check_api_key(config):
+        print("\n❌ Cannot proceed without API key. Please configure:")
+        print("   1. Create a .env file in your repository root")
+        print(f"   2. Add your API key: {config.llm.provider.upper()}_API_KEY=your_key_here")
+        print("   3. Or run 'checkpoint --init' to configure interactively")
+        sys.exit(1)
+    
     try:
         from src.llm import configure_llm
         configure_llm(

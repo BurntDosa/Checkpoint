@@ -8,8 +8,8 @@ from pydantic import BaseModel, Field
 
 class LLMConfig(BaseModel):
     """LLM provider configuration."""
-    provider: str = Field(default="openai", description="LLM provider name")
-    model: str = Field(default="gpt-4", description="Model name")
+    provider: str = Field(default="mistral", description="LLM provider name")
+    model: str = Field(default="mistral-medium-2508", description="Model name")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=2000, gt=0)
     api_key_env: str = Field(default="", description="Environment variable name for API key")

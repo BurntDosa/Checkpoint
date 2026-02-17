@@ -33,7 +33,7 @@ def configure_llm(model: str = None, api_key: str = None, temperature: float = 0
     
     # Use default model if not specified
     if model is None:
-        model = os.getenv("LLM_MODEL", "gpt-4")
+        model = os.getenv("LLM_MODEL", "mistral-medium-2508")
     
     # Set API key in environment if provided
     if api_key:
