@@ -34,10 +34,28 @@ jobs:
         env:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
         run: |
-          # 1. Update Master Context (The Map)
-          python main.py --onboard
+          # Get list of commits that were pushed
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            # New branch - get all commits
+            COMMITS=$(git rev-list ${{ github.sha }})
+          else
+            # Existing branch - get commits between before and after
+            COMMITS=$(git rev-list ${{ github.event.before }}..${{ github.sha }} 2>/dev/null || echo "")
+          fi
+          
+          # Generate checkpoint for each pushed commit
+          if [ -n "$COMMITS" ]; then
+            echo "Generating checkpoints for pushed commits..."
+            for commit in $COMMITS; do
+              echo "  Processing commit: $commit"
+              python main.py --commit "$commit" || echo "Failed to generate checkpoint for $commit"
+            done
+          else
+            echo "No new commits to process"
+          fi
 
-          # 2. Update All User Catchups (The News Feed)
+          # Update catchup summaries for all active developers
+          echo "Generating catchup summaries..."
           python main.py --catchup-all
           
       - name: Commit Checkpoint & Context
