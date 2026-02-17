@@ -1,33 +1,34 @@
-# While You Were Gone (Since 2026-01-13)
-
----
+# While You Were Gone (2026-02-11 → Present)
 
 ## Changes Summary
-- **AI-Driven Onboarding**: Added `--onboard` and `--catchup` CLI commands to auto-generate repository maps and change summaries.
-- **Agent Layer**: Introduced `CatchupSummarizer` and `MasterContextGenerator` to synthesize historical changes and structural context.
-- **Git Integration**: Automated user activity detection (`get_last_commit_by_author`) and personalized summaries via local Git configs.
-- **Storage Overhaul**: Enhanced `src/storage.py` to handle heterogeneous data (checkpoints, summaries, maps) with `YYYY-MM-DD` filtering.
-
----
+- **Git Hooks**: Now support **development mode**—no global `checkpoint` install needed. Hooks dynamically detect `.venv` and `main.py` to run locally.
+- **Storage Layer**: Updated to handle new checkpoint filenames (e.g., `Checkpoint-Jane-2026-02-17-abc123.md`) while maintaining backward compatibility.
+- **System Overhaul**:
+  - **Universal LLM Support**: Added `LiteLLM` integration (OpenAI, Anthropic, Mistral, etc.).
+  - **Git Automation**: Hooks auto-generate checkpoints on commit.
+  - **Language-Agnostic**: Works with any programming language (not just Python).
+  - **Interactive Setup**: New wizard for configuration and environment detection.
 
 ## New Dependencies
-- **System Tools**: `tree`/`find` for file structure context (used in `get_file_tree`).
-- **Git Metadata**: Local user email/config now required for personalized catch-up summaries.
-- **Removed**: ChromaDB binary files (`.chroma_db/`) excluded from version control; added to `.gitignore`.
-
----
+| Dependency   | Purpose                          |
+|--------------|----------------------------------|
+| `LiteLLM`    | Multi-provider LLM support       |
+| `Pydantic`   | Configuration management         |
 
 ## Refactors
-- **Reliability**:
-  - Added retry logic (3 attempts) and 35-second sleep for `RESOURCE_EXHAUSTED` (429) errors in `src/llm.py`.
-  - Null-checks for `final_state` in `main.py` to prevent crashes.
-- **Architectural Cleanup**:
-  - Removed obsolete ChromaDB binaries (`chroma.sqlite3`, `*.bin` files).
-  - Refactored workflow to auto-update `MASTER_CONTEXT.md` during checkpoints.
-
----
+1. **`storage.py`**:
+   - Replaced hardcoded date parsing with regex to support metadata-rich filenames.
+   - Skips malformed files gracefully.
+2. **`git_hook_installer.py`**:
+   - Added `repo_root` parameter for dev mode detection.
+   - Dynamic command generation for local vs. global execution.
 
 ## Current Focus
-- **Documentation-as-Code**: `MASTER_CONTEXT.md` is now version-controlled and auto-generated via `main.py --onboard`.
-- **Pipeline Stability**: The `--onboard` workflow is a critical path for checkpoint automation.
-- **Error Resilience**: Self-healing logic in the LLM layer reduces manual intervention.
+- **Goal**: Position `checkpoint` as a **universal developer onboarding tool**.
+- **Key Initiatives**:
+  - Expand LLM provider integrations (e.g., Azure, Ollama).
+  - Enhance git hook reliability (backup/restore, cross-platform testing).
+  - Improve documentation with auto-generated diagrams.
+- **How to Catch Up**:
+  - Run `checkpoint --setup` to configure the new interactive wizard.
+  - Test git hooks locally: `git commit -m "test"` → auto-generates a checkpoint.

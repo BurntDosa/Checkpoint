@@ -1,21 +1,23 @@
-# While You Were Gone (2026-01-13 → Present)
+# While You Were Gone
 
 ## Changes Summary
-- **CLI Expansion**: Added `--onboard` and `--catchup` commands to `main.py` for AI-driven project summaries.
-- **Agent Layer**: New modules (`CatchupSummarizer`, `OnboardingSynthesizer`) synthesize repository context and changes.
-- **Git Integration**: Automated user activity detection (`get_last_commit_by_author`) and context updates in workflows.
-- **Storage**: Enhanced checkpoint filtering (`get_checkpoints_since`) and added persistence for `MASTER_CONTEXT.md`.
+- **Git Hooks**: Now support **development mode**—detects local `.venv` and runs `main.py` directly, eliminating global install friction.
+- **Universal LLM Support**: Replaced Mistral with **LiteLLM**, adding compatibility for OpenAI, Anthropic, Azure, Ollama, and more.
+- **Interactive Setup**: New wizard guides users through config (language detection, API keys, feature toggles).
+- **Git Integration**: Hooks auto-generate checkpoints on commit; includes backup/restoration.
+- **Language-Agnostic**: Expanded beyond Python with LLM-based diagram generation and multi-language support.
 
 ## New Dependencies
-- **System Tools**: `tree`/`find` (for file tree generation).
-- **Environment Coupling**: Tighter Git metadata reliance (e.g., `get_local_user_email`).
+- **Core**: `litellm` (LLM abstraction), `pydantic` (config models).
+- **Dev Mode**: Virtualenv (`.venv/bin/python`) for local hook execution.
+- **Packaging**: `pyproject.toml` for standardized distribution.
 
 ## Refactors
-- **Error Handling**: Retry logic (3 attempts) and rate-limit recovery (35s sleep) in `GeminiLM.basic_request`.
-- **Data Hygiene**: Removed ChromaDB binary files from version control; added `.chroma_db/` to `.gitignore`.
-- **Workflow**: Renamed steps to reflect combined checkpoint + context updates (e.g., "Commit Checkpoint & Context").
+- **Decoupled LLM Logic**: LiteLLM integration replaces hardcoded Mistral calls.
+- **Dynamic Hooks**: Templates now use f-strings to inject commands based on environment (dev vs. global).
+- **Modular Config**: Pydantic models manage settings (API keys, paths, toggles).
 
 ## Current Focus
-1. **Master Context Synchronization**: Auto-updating `MASTER_CONTEXT.md` via `--onboard` in CI/CD.
-2. **Resilience**: Self-healing LLM layer and state validation in `main.py`.
-3. **Repository Health**: Enforcing separation of logic/persistence (e.g., ChromaDB initialization now explicit).
+- **Testing**: Validate LLM provider integrations (e.g., OpenAI vs. Ollama) and git hook reliability.
+- **Expansion**: Adding more language-specific features (e.g., JavaScript/TypeScript support).
+- **Documentation**: Updating diagrams and examples for new setup workflows.

@@ -1,22 +1,66 @@
-# While You Were Gone
+# While You Were Gone (Since 2026-02-11)
 
-### Changes Summary
-- **AI-Driven Documentation Agents**: Introduced a new **Agent Layer** (`src/agents.py`) featuring `CatchupSummarizer` and `OnboardingSynthesizer`. These tools allow users to generate personalized summaries of changes and structural "Master Context" maps of the repository.
-- **CLI Enhancements**: Updated `main.py` with new `--onboard` and `--catchup` flags. The system now utilizes local `tree` or `find` utilities to provide structural context to the LLM.
-- **Reliability Layer**: The LLM provider (`src/llm.py`) now includes a self-healing retry mechanism (3 attempts) and specific logic to handle `RESOURCE_EXHAUSTED` errors by pausing for 35 seconds.
-- **Automated Context Sync**: The GitHub workflow was updated to automatically run the onboarding agent and commit the resulting `MASTER_CONTEXT.md` file whenever a checkpoint is triggered.
-- **Storage Management**: Enhanced `src/storage.py` to filter checkpoints by date and added logic to clean up obsolete checkpoint files.
+## Changes Summary
+The system underwent a **major architectural evolution**, shifting from a Python-specific tool to a **language-agnostic developer onboarding platform** with:
+- **Universal LLM Support**: Added LiteLLM integration for OpenAI, Anthropic, Mistral, Azure, Ollama, and more.
+- **Git Workflow Automation**: Auto-generates checkpoints on commit via git hooks.
+- **Interactive Setup**: Wizard-driven configuration with language detection and validation.
+- **Metadata-Rich Storage**: Filenames now support authorship and project tags (e.g., `Checkpoint-Jane-2026-02-17-abc123.md`).
 
-### New Dependencies
-- **System Utilities**: The system now relies on the presence of `tree` or `find` at the OS level for directory mapping.
-- **Git Metadata**: Tightened integration with local Git configurations (`user.email`) to personalize the catch-up experience.
-- **Master Context Artifact**: `MASTER_CONTEXT.md` is now a required version-controlled artifact that serves as the source of truth for AI agents.
+---
 
-### Refactors
-- **LLM Provider Logic**: Refactored `GeminiLM.basic_request` to encapsulate error handling and configuration cleanup, removing boilerplate from the caller.
-- **State Validation**: Implemented strict null-checks and key validation for the `final_state` object in `main.py` to improve application stability.
-- **Data Layer Purge**: Removed `.chroma_db` binary files and SQLite databases from the repository history and updated `.gitignore` to prevent future bloat.
+## New Dependencies
+| Dependency       | Purpose                                  | Impact                          |
+|------------------|------------------------------------------|---------------------------------|
+| `litellm`        | Multi-provider LLM abstraction           | Enables switching between LLMs  |
+| `pydantic`       | Configuration modeling                   | Validates and manages settings  |
+| `typer`          | CLI argument parsing                     | Powers the interactive setup    |
 
-### Current Focus
-- **High-Fidelity Context**: Ensuring the stability of the `main.py --onboard` command, as it is now a critical path for the automated workflow.
-- **Environment Bootstrapping**: Transitioning to a model where the vector store (ChromaDB) is populated via an ingestion process during setup rather than being pulled from version control.
+---
+
+## Refactors
+
+### 1. Git Hook Installer
+**Problem**: Hooks assumed global `checkpoint` installation, blocking local development.
+**Solution**:
+- **Development Mode Detection**: Hooks now auto-detect `.venv/bin/python main.py` in the repo root.
+- **Dynamic Command Generation**:
+  ```sh
+  # Dev mode (new)
+  ".venv/bin/python" "main.py" --commit "$COMMIT_HASH"
+
+  # Production (unchanged)
+  checkpoint --commit "$COMMIT_HASH"
+  ```
+**Impact**: Developers can test changes **without global installs**.
+
+### 2. Storage Layer
+**Problem**: Hardcoded date parsing failed with new metadata-rich filenames (e.g., `Checkpoint-Jane-2026-02-17-abc123.md`).
+**Solution**:
+- **Regex-Based Parsing**: Extracts dates from both legacy (`YYYY-MM-DD-hash.md`) and new formats.
+- **Graceful Degradation**: Skips malformed files instead of crashing.
+**Impact**: Supports **incremental adoption** of new naming conventions.
+
+### 3. Configuration System
+- **Modular Design**: Pydantic models for settings (e.g., LLM provider, git hook paths).
+- **Feature Toggles**: Enable/disable components like diagram generation.
+- **Environment Variables**: Override config via `.env` (e.g., `OPENAI_API_KEY`).
+
+---
+
+## Current Focus
+1. **LLM Integration Testing**:
+   - Validate performance across providers (OpenAI vs. Ollama).
+   - Optimize prompt templates for non-Python languages.
+2. **Git Hook Robustness**:
+   - Test edge cases (e.g., missing `.venv`, nested repos).
+   - Add hook **conflict resolution** for existing git configs.
+3. **Metadata Expansion**:
+   - Extend filename parsing to support `Project-Author-Date-Hash.md`.
+   - Enable queries like `"Show all checkpoints by Jane in ProjectX"`.
+
+---
+**Next Steps for You**:
+- Test local dev workflow: `git commit` should now trigger `main.py` via `.venv`.
+- Try the setup wizard: Run `checkpoint --setup` to configure your LLM provider.
+- Review new checkpoints: Filenames now include **author/project metadata**.
