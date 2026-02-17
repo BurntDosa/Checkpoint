@@ -1,66 +1,63 @@
-# While You Were Gone (Since 2026-02-11)
+# While You Were Gone (2026-02-11 → 2026-02-17)
 
 ## Changes Summary
-The system underwent a **major architectural evolution**, shifting from a Python-specific tool to a **language-agnostic developer onboarding platform** with:
-- **Universal LLM Support**: Added LiteLLM integration for OpenAI, Anthropic, Mistral, Azure, Ollama, and more.
-- **Git Workflow Automation**: Auto-generates checkpoints on commit via git hooks.
-- **Interactive Setup**: Wizard-driven configuration with language detection and validation.
-- **Metadata-Rich Storage**: Filenames now support authorship and project tags (e.g., `Checkpoint-Jane-2026-02-17-abc123.md`).
+The **Code Checkpoint** system has evolved from a Python-specific tool to a **language-agnostic developer onboarding platform** with **LLM integration** and **git automation**. Key milestones:
+- **Storage Layer**: Filenames now support metadata (e.g., `Checkpoint-Author-2026-02-17-abc123.md`) via regex parsing (backward-compatible).
+- **Configuration**: New `.checkpoint.yaml` introduces **Mistral API**, **Chroma DB semantic search**, and **multi-language support** (Python, JS, C/C++).
+- **Git Hooks**: Automatically generate checkpoints on commit; **dev mode** detects local environments to run `main.py` directly (no global install needed).
+- **Architecture**: Replaced Mistral-specific code with **LiteLLM** (supports OpenAI, Anthropic, etc.) and added an **interactive setup wizard**.
 
 ---
 
 ## New Dependencies
-| Dependency       | Purpose                                  | Impact                          |
-|------------------|------------------------------------------|---------------------------------|
-| `litellm`        | Multi-provider LLM abstraction           | Enables switching between LLMs  |
-| `pydantic`       | Configuration modeling                   | Validates and manages settings  |
-| `typer`          | CLI argument parsing                     | Powers the interactive setup    |
+| Component          | Purpose                                                                 | Impact                          |
+|--------------------|-------------------------------------------------------------------------|---------------------------------|
+| `.checkpoint.yaml` | Central config for LLM, DB, and git hooks                              | Requires `api_key_env` setup.   |
+| **Chroma DB**      | Local vector DB for semantic search (`./.chroma_db`)                   | Adds storage overhead.          |
+| **LiteLLM**        | Universal LLM abstraction (replaces Mistral-specific code)             | Supports 10+ providers.         |
+| **Git Hooks**      | Auto-generate checkpoints on commit; dev mode for local testing.        | May slow commits slightly.      |
+| **MASTER_CONTEXT.md** | Auto-generated repository insights (centralized documentation).      | New file in root.               |
 
 ---
 
 ## Refactors
+1. **Storage Layer (`storage.py`)**
+   - **Before**: Hardcoded date extraction (`cp.name[:10]`).
+   - **After**: Regex-based parsing (`r'(\d{4})-(\d{2})-(\d{2})'`) supports legacy and new formats (e.g., `ProjectX-Jane-2026-02-17-abc123.md`).
+   - **Why**: Future-proofing for metadata like authorship/project names.
 
-### 1. Git Hook Installer
-**Problem**: Hooks assumed global `checkpoint` installation, blocking local development.
-**Solution**:
-- **Development Mode Detection**: Hooks now auto-detect `.venv/bin/python main.py` in the repo root.
-- **Dynamic Command Generation**:
-  ```sh
-  # Dev mode (new)
-  ".venv/bin/python" "main.py" --commit "$COMMIT_HASH"
+2. **Git Hook Installer (`git_hook_installer.py`)**
+   - **Before**: Assumed global `checkpoint` install.
+   - **After**: Detects `.venv` + `main.py` to run locally:
+     ```bash
+     ".venv/bin/python main.py" --commit "$COMMIT_HASH"
+     ```
+   - **Why**: Seamless local development without global installs.
 
-  # Production (unchanged)
-  checkpoint --commit "$COMMIT_HASH"
-  ```
-**Impact**: Developers can test changes **without global installs**.
-
-### 2. Storage Layer
-**Problem**: Hardcoded date parsing failed with new metadata-rich filenames (e.g., `Checkpoint-Jane-2026-02-17-abc123.md`).
-**Solution**:
-- **Regex-Based Parsing**: Extracts dates from both legacy (`YYYY-MM-DD-hash.md`) and new formats.
-- **Graceful Degradation**: Skips malformed files instead of crashing.
-**Impact**: Supports **incremental adoption** of new naming conventions.
-
-### 3. Configuration System
-- **Modular Design**: Pydantic models for settings (e.g., LLM provider, git hook paths).
-- **Feature Toggles**: Enable/disable components like diagram generation.
-- **Environment Variables**: Override config via `.env` (e.g., `OPENAI_API_KEY`).
+3. **LLM Integration**
+   - **Before**: Mistral-only implementation.
+   - **After**: **LiteLLM** abstraction with modular providers (OpenAI, Azure, etc.).
+   - **Why**: Avoid vendor lock-in; support diverse team preferences.
 
 ---
 
 ## Current Focus
-1. **LLM Integration Testing**:
-   - Validate performance across providers (OpenAI vs. Ollama).
-   - Optimize prompt templates for non-Python languages.
-2. **Git Hook Robustness**:
-   - Test edge cases (e.g., missing `.venv`, nested repos).
-   - Add hook **conflict resolution** for existing git configs.
-3. **Metadata Expansion**:
-   - Extend filename parsing to support `Project-Author-Date-Hash.md`.
-   - Enable queries like `"Show all checkpoints by Jane in ProjectX"`.
+1. **Setup & Testing**:
+   - Populate `api_key_env` in `.checkpoint.yaml` for LLM access.
+   - Validate git hook performance (especially with Chroma DB overhead).
+   - Test multi-language support (e.g., JS/Go checkpoints).
+
+2. **Documentation**:
+   - Update `README` to reflect **new workflows** (e.g., semantic search, auto-diagrams).
+   - Document **dev mode** for contributors.
+
+3. **Next Steps**:
+   - Monitor Chroma DB size for large repos.
+   - Explore **project-specific metadata** in filenames (e.g., `ProjectX-*`).
+   - Gather feedback on LLM-generated `MASTER_CONTEXT.md`.
 
 ---
-**Next Steps for You**:
-- Test local dev workflow: `git commit` should now trigger `main.py` via `.venv`.
-- Try the setup wizard: Run `checkpoint --setup` to configure your LLM provider.
-- Review new checkpoints: Filenames now include **author/project metadata**.
+**Action Items for You**:
+- Run `checkpoint --setup` to configure the new `.checkpoint.yaml`.
+- Test git hooks locally (`git commit` should auto-generate a checkpoint).
+- Review `MASTER_CONTEXT.md` for auto-generated repository insights.
