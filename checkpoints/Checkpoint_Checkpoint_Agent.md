@@ -1,28 +1,48 @@
 # While You Were Gone
 
 ## Changes Summary
-- **Architectural Overhaul**: Code Checkpoint evolved from a Python-specific tool to a **language-agnostic developer onboarding platform** with universal LLM support (LiteLLM) and interactive setup.
-- **Git Integration**: Added **development mode** for local testing without global installation, plus automatic checkpoint generation on commit.
-- **Metadata-Rich Storage**: Updated filename parsing to support authorship/project metadata (e.g., `Checkpoint-Jane-2026-02-17-abc123.md`) while maintaining backward compatibility.
+Since **2026-02-17**, the Code Checkpoint system has undergone significant architectural improvements to enhance flexibility, performance, and language support:
+
+- **Storage Layer**: Updated filename parsing to support metadata-rich formats (e.g., `Checkpoint-Jane-2026-02-17-abc123.md`) while maintaining backward compatibility.
+- **Git Hooks**:
+  - Migrated from **post-commit** to **pre-push** to reduce local development overhead.
+  - Added **development mode** for seamless local testing without global installations.
+- **LLM Integration**: Replaced Mistral-specific code with **LiteLLM**, enabling support for OpenAI, Anthropic, Azure, and others.
+- **Language Support**: Expanded beyond Python to include JavaScript, C/C++, Java, Go, and Rust.
+
+---
 
 ## New Dependencies
-| Component          | Purpose                                                                 |
-|--------------------|-------------------------------------------------------------------------|
-| `.checkpoint.yaml` | Configures LLM (Mistral), Chroma DB (semantic search), and git hooks.   |
-| **LiteLLM**        | Replaces Mistral-specific code; supports OpenAI, Anthropic, etc.       |
-| **Chroma DB**      | Local vector database for semantic search (stored in `.chroma_db`).    |
-| **Git Hooks**      | Automates checkpoint generation post-commit (dev mode supported).     |
+| Component       | Purpose                                                                 |
+|-----------------|-------------------------------------------------------------------------|
+| **LiteLLM**     | Universal LLM provider integration (replaces Mistral-specific code).  |
+| **Chroma DB**   | Local vector database for semantic search (stored in `.chroma_db`).    |
+| **Pydantic**    | Modular configuration management (e.g., `.checkpoint.yaml`).          |
+
+---
 
 ## Refactors
 1. **Storage Layer**:
-   - Replaced hardcoded date extraction with regex (`r'(\d{4})-(\d{2})-(\d{2})'`) to handle legacy/new filenames.
-   - Skips malformed files gracefully.
-2. **Git Hook Installer**:
-   - Detects `.venv/bin/python` for dev mode, dynamically generating hooks.
-3. **LLM Abstraction**:
-   - Migrated from Mistral-specific calls to LiteLLM’s unified interface.
+   - Replaced hardcoded date parsing with regex to support flexible filename formats.
+   - Added graceful error handling for malformed filenames.
+2. **Git Hooks**:
+   - Dynamic command generation for dev/local environments.
+   - Pre-push hook logic to process commit ranges during `git push`.
+3. **Configuration**:
+   - Centralized settings in `.checkpoint.yaml` (LLM, DB, git hooks, ignored paths).
+   - Interactive setup wizard for guided onboarding.
+
+---
 
 ## Current Focus
-- **Language-Agnostic Expansion**: Adding diagram generation and context recovery for Python, JavaScript, C/C++, etc.
-- **Developer Onboarding**: Interactive setup wizard and `MASTER_CONTEXT.md` for centralized insights.
-- **Performance**: Monitoring Chroma DB/LLM overhead in git operations.
+- **Testing**: Validate LLM provider integrations and git hook reliability.
+- **Documentation**: Update diagrams and examples for new workflows (e.g., pre-push hooks).
+- **Expansion**: Add language-specific features (e.g., diagram generation for JavaScript/TypeScript).
+
+**Action Required**:
+- Uninstall legacy post-commit hooks and install pre-push hooks:
+  ```bash
+  python -m git_hook_installer uninstall
+  python -m git_hook_installer install
+  ```
+- Configure `.checkpoint.yaml` for your LLM provider and repository paths.

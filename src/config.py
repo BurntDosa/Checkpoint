@@ -32,10 +32,10 @@ class RepositoryConfig(BaseModel):
 
 class FeaturesConfig(BaseModel):
     """Feature toggles."""
-    git_hook: bool = Field(default=True, description="Install git post-commit hook")
+    git_hook: bool = Field(default=False, description="Install git hook (not needed if using GitHub Actions)")
     vector_db: bool = Field(default=True, description="Enable ChromaDB semantic search")
     diagrams: bool = Field(default=True, description="Generate Mermaid diagrams")
-    auto_catchup: bool = Field(default=False, description="Auto-generate catchup after each commit")
+    auto_catchup: bool = Field(default=False, description="Auto-generate catchup (handled by GitHub Actions)")
 
 
 class CheckpointConfig(BaseModel):
