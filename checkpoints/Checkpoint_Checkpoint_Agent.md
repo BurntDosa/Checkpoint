@@ -1,34 +1,43 @@
-# While You Were Gone
+# While You Were Gone (2026-02-17 → Present)
 
 ## Changes Summary
-- **Git Hooks**:
-  - Migrated from `post-commit` to **`pre-push`** to reduce local overhead (checkpoints now generate only on `git push`).
-  - Added **development mode** support: hooks now run `main.py` directly in local repos (no global install needed).
+- **Architectural Shift**: Migrated from local git hooks to **CI/CD-driven checkpoint generation** (GitHub Actions).
+  - Checkpoints now created *only on push* (`pre-push` hook), reducing local overhead.
+  - Legacy `post-commit` hooks and bulk `--onboard` commands removed.
 - **Storage Layer**:
-  - Filenames now support **metadata** (e.g., `Checkpoint-Jane-2026-02-17-abc123.md`) via regex parsing.
-  - Backward-compatible with legacy formats.
-- **LLM Integration**:
-  - Switched from Mistral to **LiteLLM** for multi-provider support (OpenAI, Anthropic, etc.).
-- **CI/CD**:
-  - Checkpoints are now generated in **GitHub Actions** (not locally), ensuring consistency.
+  - Regex-based filename parsing supports both legacy (`YYYY-MM-DD-hash.md`) and new formats (`Checkpoint-Author-YYYY-MM-DD-hash.md`).
+  - ChromaDB cleanup removed binary files; metadata extraction is now fault-tolerant.
+- **Documentation**: Purged 12 historical checkpoint files (Jan–Feb 2026), likely replaced by **automated `MASTER_CONTEXT.md`**.
 
 ## New Dependencies
-- **LiteLLM**: Universal LLM interface (replaces Mistral-specific code).
-- **Chroma DB**: Local vector database for semantic search (stored in `.chroma_db`).
-- **GitHub Actions**: Workflow (`checkpoint.yml`) for automated checkpoint generation on push.
+| Dependency       | Purpose                                                                 |
+|------------------|-------------------------------------------------------------------------|
+| **LiteLLM**      | Replaces Mistral-specific code; enables **multi-provider LLM support** (OpenAI, Anthropic, etc.). |
+| **Pydantic**     | Powers the new **interactive setup wizard** for language/config validation. |
+| **GitHub Actions** | Core workflow (`checkpoint.yml`) now handles checkpoint generation.   |
 
 ## Refactors
-1. **`storage.py`**:
-   - Replaced hardcoded date slicing with regex to parse `YYYY-MM-DD` from filenames.
-   - Skips malformed files gracefully.
-2. **`git_hook_installer.py`**:
-   - Detects `.venv` and `main.py` to enable dev mode.
-   - Generates dynamic hook commands (e.g., `".venv/bin/python main.py --commit $HASH"`).
-3. **Configuration**:
-   - Added `.checkpoint.yaml` for centralized settings (LLM, DB, git hooks).
-   - Interactive setup wizard for language detection and validation.
+1. **CLI & Workflow**:
+   - `--onboard` → `--commit <hash>` for granular checkpoint generation.
+   - `--catchup-all` retained for summaries but decoupled from commit processing.
+2. **Configuration**:
+   - `.checkpoint.yaml` centralizes LLM, DB, and git hook settings.
+   - Git hooks **disabled by default** (`install_git_hook = False`).
+3. **Error Handling**:
+   - Silences `git rev-list` errors (e.g., no new commits).
+   - Skips malformed checkpoint files gracefully.
 
 ## Current Focus
-- **Testing**: Validate LLM providers and git hook reliability.
-- **Documentation**: Update diagrams for new workflows (e.g., pre-push hooks, CI/CD integration).
-- **Expansion**: Add support for more languages (beyond Python/JS) and LLM providers.
+- **Testing**: Validate LiteLLM integrations and git hook reliability across environments.
+- **Documentation**: Update architecture diagrams for CI/CD workflows.
+- **Scalability**:
+  - Expand language support (beyond Python prototype).
+  - Optimize **multi-LLM provider** performance.
+- **Trade-offs to Monitor**:
+  - Latency: Checkpoints generated only on push (not locally).
+  - CI/CD dependency: Requires GitHub Actions uptime.
+
+> **Action Items for You**:
+> - Run `python main.py --commit <hash>` to test granular checkpoint generation locally.
+> - Review `.checkpoint.yaml` for LLM/DB configurations.
+> - Check `MASTER_CONTEXT.md` for consolidated documentation.
