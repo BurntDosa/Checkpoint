@@ -59,13 +59,12 @@ jobs:
           echo "Generating catchup summaries..."
           python main.py --catchup-all
 
-      - name: Commit Checkpoint & Context
+      - name: Commit Catchup Summaries
         run: |
           git config --global user.name 'Checkpoint Agent'
           git config --global user.email 'agent@codecheckpoint.local'
-          git add checkpoints/
-          git add MASTER_CONTEXT.md || true
-          git commit -m "docs: update checkpoints & catchups for ${{ github.sha }}" || echo "No changes to commit"
+          git add checkpoints/Checkpoint_*.md
+          git commit -m "docs: update catchups for ${{ github.sha }}" || echo "No changes to commit"
           git push origin HEAD:${{ github.ref }}
 
   # Job 2: Generate per-commit checkpoints and PR summary for open/updated PRs
@@ -119,12 +118,12 @@ jobs:
           echo "Generating PR summary..."
           python main.py --pr "${PR_NUMBER}" "${BASE_SHA}" "${HEAD_SHA}" "${PR_TITLE}"
 
-      - name: Commit PR Checkpoints & Summary
+      - name: Commit PR Summary & Catchups
         run: |
           git config --global user.name 'Checkpoint Agent'
           git config --global user.email 'agent@codecheckpoint.local'
-          git add checkpoints/
-          git commit -m "docs: add checkpoints & PR summary for PR #${{ github.event.pull_request.number }}" || echo "No changes to commit"
+          git add checkpoints/Checkpoint_*.md checkpoints/PR-*.md
+          git commit -m "docs: add PR summary & catchups for PR #${{ github.event.pull_request.number }}" || echo "No changes to commit"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
   # Job 3: Regenerate master context when a PR is merged to main

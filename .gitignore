@@ -214,7 +214,7 @@ __marimo__/
 # Code Checkpoint specific
 .checkpoint.yaml          # Configuration file (may contain sensitive paths)
 .env                      # API keys and secrets
-checkpoints/              # Generated checkpoint files
+checkpoints/Checkpoint-*  # Per-commit checkpoint files (ephemeral, not committed)
 .checkpoint.log           # Hook execution logs
 .git/hooks/*.checkpoint-backup  # Hook backups
 
