@@ -331,8 +331,7 @@ Examples:
 
             commit_checkpoints = "\n\n---\n\n".join(commit_checkpoint_parts) if commit_checkpoint_parts else "No individual commit checkpoints available."
 
-            # Determine branch name from head_ref (last path component for SHA fallback)
-            head_branch = head_ref if "/" in head_ref or not head_ref.startswith("0" * 7) else head_ref
+            head_branch = head_ref  # branch name passed directly from workflow
 
             generator = PRSummaryGenerator()
             result = generator(
