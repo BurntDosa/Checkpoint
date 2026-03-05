@@ -76,8 +76,7 @@ def process_catchup(email, config, last_commit_info=None):
         print(f"  Error: Failed to generate summary for {email} (LLM returned None).")
         return
 
-    username = last_commit['author']
-    filepath = save_catchup(result.summary_markdown, username, config.repository.output_dir)
+    filepath = save_catchup(result.summary_markdown, email, config.repository.output_dir)
     print(f"  Checkpoints updated: {filepath}")
 
 def main():

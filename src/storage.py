@@ -206,29 +206,29 @@ def save_master_context(content: str, filename: str = "MASTER_CONTEXT.md") -> st
         f.write(content)
     return os.path.abspath(file_path)
 
-def save_catchup(content: str, username: str, checkpoint_dir: str = None) -> str:
+def save_catchup(content: str, email: str, checkpoint_dir: str = None) -> str:
     """
     Overwrites the user's catchup file in the checkpoints directory.
-    
+    Filename is derived from email (stable across author name changes).
+
     Args:
         content: Markdown content to write
-        username: Username from git
+        email: Git author email (used as stable filename key)
         checkpoint_dir: Custom checkpoint directory (from config or default)
-        
+
     Returns:
         Absolute path to saved file
     """
     if checkpoint_dir is None:
         checkpoint_dir = CHECKPOINT_DIR
-    
-    # Ensure directory exists
+
     os.makedirs(checkpoint_dir, exist_ok=True)
-    
-    # Sanitize username (replace spaces with _, remove weird chars)
-    safe_username = "".join([c if c.isalnum() else "_" for c in username])
-    filename = f"Checkpoint_{safe_username}.md"
+
+    # Use email as the stable filename key (replace non-alnum with _)
+    safe_email = "".join([c if c.isalnum() else "_" for c in email])
+    filename = f"Checkpoint_{safe_email}.md"
     file_path = os.path.join(checkpoint_dir, filename)
-    
+
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(content)
     return os.path.abspath(file_path)

@@ -60,39 +60,49 @@ def get_local_user_email(repo_path: str = ".") -> Optional[str]:
     reader = repo.config_reader()
     return reader.get_value("user", "email", default=None)
 
+# Emails to exclude from catchup generation (bots, CI agents)
+BOT_EMAILS = {
+    "agent@codecheckpoint.local",
+    "noreply@github.com",
+    "github-actions[bot]@users.noreply.github.com",
+}
+
 def get_active_authors_with_last_commits(days: int = 60, repo_path: str = ".", max_count: int = 1000) -> dict[str, dict]:
     """
     Single-pass optimization: Returns dict mapping email -> last commit info.
     Replaces the O(n²) pattern of get_active_authors() + get_last_commit_by_author().
-    
+    Bot emails (CI agents) are excluded automatically.
+
     Args:
         days: Look back this many days
         repo_path: Path to repository
         max_count: Maximum commits to scan (limits history depth)
-    
+
     Returns:
         {email: {"hash": str, "date": datetime, "message": str, "author": str}}
     """
     repo = get_repo(repo_path)
     import datetime
     cutoff_date = datetime.datetime.now() - datetime.timedelta(days=days)
-    
+
     author_map = {}
-    
+
     for commit in repo.iter_commits(max_count=max_count):
         if commit.committed_datetime.replace(tzinfo=None) < cutoff_date:
             break
-        
+
         email = commit.author.email
-        if email and email not in author_map:
-            # First time seeing this author = their most recent commit
-            author_map[email] = {
-                "hash": commit.hexsha,
-                "date": commit.committed_datetime,
-                "message": commit.message.strip(),
-                "author": commit.author.name
-            }
-    
+        if not email or email in BOT_EMAILS or email in author_map:
+            continue
+
+        # First time seeing this human author = their most recent commit
+        author_map[email] = {
+            "hash": commit.hexsha,
+            "date": commit.committed_datetime,
+            "message": commit.message.strip(),
+            "author": commit.author.name
+        }
+
     return author_map
 
 def get_active_authors(days: int = 60, repo_path: str = ".") -> list[str]:

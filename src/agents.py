@@ -176,7 +176,9 @@ class CatchupSummarizer(dspy.Signature):
     summary_markdown = dspy.OutputField(
         desc="A comprehensive markdown briefing. "
              "MUST include exactly these sections in order: "
-             "# While You Were Gone (2-3 sentence executive summary of the period), "
+             "# While You Were Gone — Since {user_last_active_date} "
+             "(include the actual date from user_last_active_date in the heading, e.g. '# While You Were Gone — Since 2026-02-11'. "
+             "2-3 sentence executive summary of the period), "
              "## Critical Changes (Must-Read) (breaking changes, API changes, anything that will block their work immediately), "
              "## New Features & Additions (new capabilities, endpoints, modules added), "
              "## Refactors & Structural Changes (reorganizations, renames, performance improvements), "
