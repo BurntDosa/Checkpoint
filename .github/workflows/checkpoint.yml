@@ -35,14 +35,19 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
-          # Get list of commits that were pushed
+          # Get human-authored commits that were pushed (exclude bot commits)
           if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
             # New branch — only process commits not already on main/master
-            COMMITS=$(git rev-list ${{ github.sha }} --not origin/main origin/master 2>/dev/null || echo "")
+            RAW_COMMITS=$(git rev-list ${{ github.sha }} --not origin/main origin/master 2>/dev/null || echo "")
           else
-            # Existing branch — get commits between before and after
-            COMMITS=$(git rev-list ${{ github.event.before }}..${{ github.sha }} 2>/dev/null || echo "")
+            RAW_COMMITS=$(git rev-list ${{ github.event.before }}..${{ github.sha }} 2>/dev/null || echo "")
           fi
+
+          # Filter out bot commits
+          COMMITS=$(git log --format="%H %ae" ${{ github.event.before }}..${{ github.sha }} 2>/dev/null \
+            | grep -v "agent@codecheckpoint.local" \
+            | grep -v "noreply@github.com" \
+            | awk '{print $1}' || echo "$RAW_COMMITS")
 
           # Generate checkpoint for each pushed commit
           if [ -n "$COMMITS" ]; then
@@ -105,8 +110,12 @@ jobs:
           echo "Processing PR #${PR_NUMBER}: ${PR_TITLE}"
           echo "  Base: ${BASE_SHA} → Head: ${HEAD_SHA}"
 
-          # Generate checkpoint for each commit in the PR range
-          COMMITS=$(git rev-list "${BASE_SHA}..${HEAD_SHA}" 2>/dev/null || echo "")
+          # Generate checkpoint for each human-authored commit in the PR range
+          # Exclude bot commits (agent@codecheckpoint.local and GitHub bots)
+          COMMITS=$(git log "${BASE_SHA}..${HEAD_SHA}" --format="%H %ae" 2>/dev/null \
+            | grep -v "agent@codecheckpoint.local" \
+            | grep -v "noreply@github.com" \
+            | awk '{print $1}' || echo "")
           if [ -n "$COMMITS" ]; then
             echo "Generating per-commit checkpoints..."
             for commit in $COMMITS; do
