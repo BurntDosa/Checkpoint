@@ -37,8 +37,8 @@ jobs:
         run: |
           # Get list of commits that were pushed
           if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
-            # New branch — get all commits
-            COMMITS=$(git rev-list ${{ github.sha }})
+            # New branch — only process commits not already on main/master
+            COMMITS=$(git rev-list ${{ github.sha }} --not origin/main origin/master 2>/dev/null || echo "")
           else
             # Existing branch — get commits between before and after
             COMMITS=$(git rev-list ${{ github.event.before }}..${{ github.sha }} 2>/dev/null || echo "")
