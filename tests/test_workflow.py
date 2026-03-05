@@ -5,15 +5,15 @@ import os
 # Set dummy env var to pass initial import checks if any
 os.environ["MISTRAL_API_KEY"] = "dummy_key"
 
-from src.graph import app
+from checkpoint_agent.graph import app
 
 class TestCheckpointWorkflow(unittest.TestCase):
 
-    @patch("src.graph.configure_mistral")
-    @patch("src.graph.CheckpointGenerator")
-    @patch("src.graph.save_checkpoint")
-    @patch("src.graph.VectorDB")
-    def test_full_workflow(self, mock_vector_db, mock_save, mock_generator_cls, mock_config):
+    @patch("checkpoint_agent.graph.configure_llm")
+    @patch("checkpoint_agent.graph.CheckpointGenerator")
+    @patch("checkpoint_agent.graph.save_checkpoint")
+    @patch("checkpoint_agent.vector_db.VectorDB")
+    def test_full_workflow(self, mock_vector_db, mock_save, mock_generator_cls, mock_configure):
         # Setup Mocks
         
         # Mock Generator
@@ -43,7 +43,7 @@ class TestCheckpointWorkflow(unittest.TestCase):
         # Assertions
         
         # 1. Config should check/set env
-        mock_config.assert_called_once()
+        mock_configure.assert_called_once()
         
         # 2. Generator should be called with diff
         mock_generator_instance.assert_called_once_with(diff_content=initial_state["diff_content"])
@@ -52,7 +52,7 @@ class TestCheckpointWorkflow(unittest.TestCase):
         self.assertEqual(final_state["generated_markdown"], "# Generated Checkpoint")
         
         # 4. Save should be called
-        mock_save.assert_called_once_with("# Generated Checkpoint", "abcdef123456")
+        mock_save.assert_called_once_with("# Generated Checkpoint", "abcdef123456", author="Test User")
         
         # 5. VectorDB should index the content
         mock_db_instance.add_checkpoint.assert_called_once_with(

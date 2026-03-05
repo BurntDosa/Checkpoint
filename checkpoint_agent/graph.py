@@ -1,9 +1,9 @@
 from typing import TypedDict, Optional
 from concurrent.futures import ThreadPoolExecutor
 from langgraph.graph import StateGraph, END
-from src.agents import CheckpointGenerator
-from src.storage import save_checkpoint
-from src.llm import configure_mistral
+from checkpoint_agent.agents import CheckpointGenerator
+from checkpoint_agent.storage import save_checkpoint
+from checkpoint_agent.llm import configure_llm
 import os
 
 # Define the state of the graph
@@ -19,7 +19,7 @@ _indexing_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="index
 
 # Node: Configuration
 def configure_env(state: GraphState):
-    configure_mistral()
+    configure_llm()
     return state
 
 # Node: Analysis (DSPy)
@@ -42,14 +42,14 @@ def index_output(state: GraphState):
     """
     try:
         # Lazy import to avoid loading ChromaDB unless needed
-        from src.config import load_config
+        from checkpoint_agent.config import load_config
         config = load_config()
         
         # Only index if vector_db is enabled
         if not config or not config.features.vector_db:
             return state
             
-        from src.vector_db import VectorDB
+        from checkpoint_agent.vector_db import VectorDB
         db = VectorDB()
         db.add_checkpoint(
             checkpoint_id=state["commit_hash"],

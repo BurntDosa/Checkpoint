@@ -2,7 +2,7 @@ import os
 import unittest
 import shutil
 import tempfile
-from src.mermaid_utils import generate_file_dependency_mermaid, generate_class_hierarchy_mermaid
+from checkpoint_agent.mermaid_utils import generate_file_dependency_mermaid, generate_class_hierarchy_mermaid
 
 class TestMermaidUtils(unittest.TestCase):
     def setUp(self):

@@ -1,11 +1,11 @@
 """Interactive setup wizard for Code Checkpoint."""
 import questionary
 from pathlib import Path
-from src.config import (
+from checkpoint_agent.config import (
     CheckpointConfig, LLMConfig, RepositoryConfig, FeaturesConfig,
     write_config, set_api_key_env, validate_config, get_api_key_for_provider
 )
-from src.git_hook_installer import install_hook, check_hook_status
+from checkpoint_agent.git_hook_installer import install_hook, check_hook_status
 from collections import Counter
 
 
@@ -331,7 +331,7 @@ def run_setup_wizard() -> bool:
 
 def show_current_config():
     """Display current configuration if it exists."""
-    from src.config import load_config
+    from checkpoint_agent.config import load_config
     
     config = load_config(".checkpoint.yaml")
     

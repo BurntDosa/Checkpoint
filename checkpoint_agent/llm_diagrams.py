@@ -162,7 +162,7 @@ def generate_diagrams_llm(repo_path: str = ".", languages: list[str] = None) -> 
     )
     
     # Clean diagram output (remove any extra markdown fences)
-    from src.agents import strip_code_fences
+    from checkpoint_agent.agents import strip_code_fences
     dependency_graph = strip_code_fences(result.dependency_graph)
     architecture_diagram = strip_code_fences(result.architecture_diagram)
     

@@ -47,7 +47,7 @@ dev = [
 ]
 
 [project.scripts]
-checkpoint = "checkpoint.__main__:main"
+checkpoint = "checkpoint_agent.__main__:main"
 
 [project.urls]
 Homepage = "https://github.com/checkpoint-agent/checkpoint"
@@ -57,5 +57,8 @@ Issues = "https://github.com/checkpoint-agent/checkpoint/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*", "checkpoint*"]
+include = ["checkpoint_agent*"]
 exclude = ["tests*", "checkpoints*", ".chroma_db*"]
+
+[tool.setuptools.package-data]
+checkpoint_agent = ["templates/*.yml"]
