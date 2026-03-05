@@ -100,6 +100,7 @@ Examples:
     parser.add_argument("--config", action="store_true", help="Show current configuration")
     parser.add_argument("--uninstall", action="store_true", help="Uninstall git hook")
     parser.add_argument("--install-hook", action="store_true", help="Install git hook")
+    parser.add_argument("--stats", action="store_true", help="Show checkpoint statistics for this repository.")
     
     # Analysis commands
     parser.add_argument("--commit", help="Commit hash to analyze. Defaults to HEAD.", default=None)
@@ -137,6 +138,36 @@ Examples:
         config = load_config(args.config_file)
         success = install_hook(".", auto_catchup=config.features.auto_catchup)
         sys.exit(0 if success else 1)
+
+    if args.stats:
+        from src.storage import get_checkpoint_stats
+        stats = get_checkpoint_stats()
+        cp = stats["commit_checkpoints"]
+        print("\n📊 Checkpoint Statistics")
+        print("=" * 40)
+        print(f"  Commit checkpoints : {cp['count']}")
+        if cp["oldest"] and cp["newest"]:
+            if cp["oldest"] == cp["newest"]:
+                print(f"  Date range         : {cp['oldest']}")
+            else:
+                print(f"  Date range         : {cp['oldest']} → {cp['newest']}")
+        print(f"  Catchup files      : {len(stats['catchups'])}")
+        if stats["catchups"]:
+            for u in stats["catchups"]:
+                print(f"    - {u}")
+        print(f"  PR summaries       : {len(stats['pr_summaries'])}")
+        if stats["pr_summaries"]:
+            for p in stats["pr_summaries"]:
+                print(f"    - {p}")
+        print(f"  Contributing authors ({len(stats['authors'])}):")
+        for a in stats["authors"]:
+            print(f"    - {a}")
+        if stats["most_recent"]:
+            print(f"\n  Most recent checkpoints:")
+            for name in stats["most_recent"]:
+                print(f"    - {name}")
+        print()
+        sys.exit(0)
     
     # Load configuration
     config = load_config(args.config_file)

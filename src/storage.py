@@ -95,6 +95,76 @@ def get_checkpoints_since(since_date: datetime.datetime) -> list[str]:
     
     return [content for content in active_checkpoints if content]
 
+def get_checkpoint_stats() -> dict:
+    """
+    Returns a summary of all checkpoint-related files in the checkpoints directory.
+
+    Returns a dict with:
+      - commit_checkpoints: count and date range of standard commit checkpoints
+      - authors: unique author names extracted from checkpoint filenames
+      - catchups: list of catchup usernames
+      - pr_summaries: list of PR summary filenames
+      - most_recent: list of the 5 most recent checkpoint filenames
+    """
+    if not os.path.exists(CHECKPOINT_DIR):
+        return {
+            "commit_checkpoints": {"count": 0, "oldest": None, "newest": None},
+            "authors": [],
+            "catchups": [],
+            "pr_summaries": [],
+            "most_recent": [],
+        }
+
+    all_files = sorted(Path(CHECKPOINT_DIR).glob("*.md"))
+    date_pattern = re.compile(r'(\d{4}-\d{2}-\d{2})')
+    # Checkpoint-AuthorName-YYYY-MM-DD-hash.md
+    commit_pattern = re.compile(r'^Checkpoint-(.+)-(\d{4}-\d{2}-\d{2})-[0-9a-f]+\.md$')
+
+    commit_files = []
+    authors = set()
+    catchups = []
+    pr_summaries = []
+
+    for f in all_files:
+        name = f.name
+        if name == "MASTER_CONTEXT.md":
+            continue
+        if name.startswith("Checkpoint_"):
+            catchups.append(name[len("Checkpoint_"):-len(".md")])
+        elif name.startswith("PR-"):
+            pr_summaries.append(name)
+        elif name.startswith("catchup_"):
+            catchups.append(name)
+        else:
+            commit_files.append(name)
+            m = commit_pattern.match(name)
+            if m:
+                authors.add(m.group(1))
+
+    # Extract date range from commit checkpoint filenames
+    dates = []
+    for name in commit_files:
+        m = date_pattern.search(name)
+        if m:
+            try:
+                dates.append(datetime.datetime.strptime(m.group(1), "%Y-%m-%d").date())
+            except ValueError:
+                pass
+
+    most_recent = sorted(commit_files)[-5:][::-1]
+
+    return {
+        "commit_checkpoints": {
+            "count": len(commit_files),
+            "oldest": str(min(dates)) if dates else None,
+            "newest": str(max(dates)) if dates else None,
+        },
+        "authors": sorted(authors),
+        "catchups": catchups,
+        "pr_summaries": pr_summaries,
+        "most_recent": most_recent,
+    }
+
 def save_pr_summary(content: str, pr_number: str, head_branch: str, output_dir: str = None) -> str:
     """
     Saves a PR summary to checkpoints/PR-{number}-{safe_branch}.md.
