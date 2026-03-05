@@ -26,8 +26,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install checkpoint
+        run: pip install checkpoint-agent
 
       - name: Run Checkpoint Agent & Update Contexts
         env:
@@ -54,7 +54,7 @@ jobs:
             echo "Generating checkpoints for pushed commits..."
             for commit in $COMMITS; do
               echo "  Processing commit: $commit"
-              python main.py --commit "$commit" || echo "Failed to generate checkpoint for $commit"
+              checkpoint --commit "$commit" || echo "Failed to generate checkpoint for $commit"
             done
           else
             echo "No new commits to process"
@@ -62,7 +62,7 @@ jobs:
 
           # Update catchup summaries for all active developers
           echo "Generating catchup summaries..."
-          python main.py --catchup-all
+          checkpoint --catchup-all
 
       - name: Commit Catchup Summaries
         run: |
@@ -92,8 +92,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install checkpoint
+        run: pip install checkpoint-agent
 
       - name: Generate Per-Commit Checkpoints & PR Summary
         env:
@@ -111,7 +111,6 @@ jobs:
           echo "  Base: ${BASE_SHA} → Head: ${HEAD_SHA}"
 
           # Generate checkpoint for each human-authored commit in the PR range
-          # Exclude bot commits (agent@codecheckpoint.local and GitHub bots)
           COMMITS=$(git log "${BASE_SHA}..${HEAD_SHA}" --format="%H %ae" 2>/dev/null \
             | grep -v "agent@codecheckpoint.local" \
             | grep -v "noreply@github.com" \
@@ -120,13 +119,13 @@ jobs:
             echo "Generating per-commit checkpoints..."
             for commit in $COMMITS; do
               echo "  Processing commit: $commit"
-              python main.py --commit "$commit" || echo "Failed to generate checkpoint for $commit"
+              checkpoint --commit "$commit" || echo "Failed to generate checkpoint for $commit"
             done
           fi
 
           # Generate PR-level summary
           echo "Generating PR summary..."
-          python main.py --pr "${PR_NUMBER}" "${BASE_SHA}" "${HEAD_BRANCH}" "${PR_TITLE}"
+          checkpoint --pr "${PR_NUMBER}" "${BASE_SHA}" "${HEAD_BRANCH}" "${PR_TITLE}"
 
       - name: Commit PR Summary & Catchups
         run: |
@@ -156,8 +155,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install checkpoint
+        run: pip install checkpoint-agent
 
       - name: Regenerate Master Context
         env:
@@ -166,7 +165,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           echo "PR #${{ github.event.pull_request.number }} merged — regenerating MASTER_CONTEXT.md..."
-          python main.py --onboard
+          checkpoint --onboard
 
       - name: Commit Updated Master Context
         run: |
