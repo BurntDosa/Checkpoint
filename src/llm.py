@@ -6,8 +6,8 @@ import litellm
 import httpx
 
 
-def configure_llm(model: str = None, api_key: str = None, temperature: float = 0.7, 
-                  max_tokens: int = 2000, **kwargs):
+def configure_llm(model: str = None, api_key: str = None, temperature: float = 0.7,
+                  max_tokens: int = 8000, **kwargs):
     """
     Configure LLM using LiteLLM for universal provider support.
     
