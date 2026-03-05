@@ -44,8 +44,8 @@ def list_checkpoints():
     all_files = Path(CHECKPOINT_DIR).glob("*.md")
     valid_checkpoints = []
     for f in all_files:
-        # Exclude Catchup files (Checkpoint_Username.md)
-        if f.name.startswith("Checkpoint_") or f.name.startswith("catchup_") or f.name == "MASTER_CONTEXT.md":
+        # Exclude Catchup files (Checkpoint_Username.md), PR summaries, and master context
+        if f.name.startswith("Checkpoint_") or f.name.startswith("catchup_") or f.name.startswith("PR-") or f.name == "MASTER_CONTEXT.md":
             continue
             
         # Include Standard Checkpoints (Checkpoint-Username-Date-Hash.md or old format)
@@ -94,6 +94,30 @@ def get_checkpoints_since(since_date: datetime.datetime) -> list[str]:
         active_checkpoints = list(executor.map(read_file, valid_checkpoints))
     
     return [content for content in active_checkpoints if content]
+
+def save_pr_summary(content: str, pr_number: str, head_branch: str, output_dir: str = None) -> str:
+    """
+    Saves a PR summary to checkpoints/PR-{number}-{safe_branch}.md.
+
+    Args:
+        content: Markdown content to write
+        pr_number: The pull request number
+        head_branch: The feature branch name (used in filename)
+        output_dir: Custom checkpoint directory (from config or default)
+
+    Returns:
+        Absolute path to saved file
+    """
+    checkpoint_dir = output_dir if output_dir else CHECKPOINT_DIR
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    safe_branch = "".join([c if c.isalnum() or c in "-_" else "-" for c in head_branch])
+    filename = f"PR-{pr_number}-{safe_branch}.md"
+    file_path = os.path.join(checkpoint_dir, filename)
+
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(content)
+    return os.path.abspath(file_path)
 
 def save_master_context(content: str, filename: str = "MASTER_CONTEXT.md") -> str:
     """

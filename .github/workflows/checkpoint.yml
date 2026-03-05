@@ -3,46 +3,47 @@ name: Code Checkpoint
 on:
   push:
     branches:
-      - main
-      - master
+      - '**'
   pull_request:
     types: [opened, synchronize, closed]
 
 jobs:
-  checkpoint:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+  # Job 1: Process commits on any branch push
+  checkpoint-push:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0 # Fetch all history for diffs
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
-          
+          python-version: '3.12'
+
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          
+        run: pip install -r requirements.txt
+
       - name: Run Checkpoint Agent & Update Contexts
         env:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
           # Get list of commits that were pushed
           if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
-            # New branch - get all commits
+            # New branch — get all commits
             COMMITS=$(git rev-list ${{ github.sha }})
           else
-            # Existing branch - get commits between before and after
+            # Existing branch — get commits between before and after
             COMMITS=$(git rev-list ${{ github.event.before }}..${{ github.sha }} 2>/dev/null || echo "")
           fi
-          
+
           # Generate checkpoint for each pushed commit
           if [ -n "$COMMITS" ]; then
             echo "Generating checkpoints for pushed commits..."
@@ -57,12 +58,110 @@ jobs:
           # Update catchup summaries for all active developers
           echo "Generating catchup summaries..."
           python main.py --catchup-all
-          
+
       - name: Commit Checkpoint & Context
         run: |
           git config --global user.name 'Checkpoint Agent'
           git config --global user.email 'agent@codecheckpoint.local'
           git add checkpoints/
-          git add MASTER_CONTEXT.md || echo "Master Context not changed"
-          git commit -m "docs: update master context & catchups for ${{ github.sha }}" || echo "No changes to commit"
+          git add MASTER_CONTEXT.md || true
+          git commit -m "docs: update checkpoints & catchups for ${{ github.sha }}" || echo "No changes to commit"
           git push origin HEAD:${{ github.ref }}
+
+  # Job 2: Generate per-commit checkpoints and PR summary for open/updated PRs
+  checkpoint-pr:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Generate Per-Commit Checkpoints & PR Summary
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          PR_NUMBER="${{ github.event.pull_request.number }}"
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
+
+          echo "Processing PR #${PR_NUMBER}: ${PR_TITLE}"
+          echo "  Base: ${BASE_SHA} → Head: ${HEAD_SHA}"
+
+          # Generate checkpoint for each commit in the PR range
+          COMMITS=$(git rev-list "${BASE_SHA}..${HEAD_SHA}" 2>/dev/null || echo "")
+          if [ -n "$COMMITS" ]; then
+            echo "Generating per-commit checkpoints..."
+            for commit in $COMMITS; do
+              echo "  Processing commit: $commit"
+              python main.py --commit "$commit" || echo "Failed to generate checkpoint for $commit"
+            done
+          fi
+
+          # Generate PR-level summary
+          echo "Generating PR summary..."
+          python main.py --pr "${PR_NUMBER}" "${BASE_SHA}" "${HEAD_SHA}" "${PR_TITLE}"
+
+      - name: Commit PR Checkpoints & Summary
+        run: |
+          git config --global user.name 'Checkpoint Agent'
+          git config --global user.email 'agent@codecheckpoint.local'
+          git add checkpoints/
+          git commit -m "docs: add checkpoints & PR summary for PR #${{ github.event.pull_request.number }}" || echo "No changes to commit"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
+  # Job 3: Regenerate master context when a PR is merged to main
+  update-master-context:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout base branch post-merge
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Regenerate Master Context
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          echo "PR #${{ github.event.pull_request.number }} merged — regenerating MASTER_CONTEXT.md..."
+          python main.py --onboard
+
+      - name: Commit Updated Master Context
+        run: |
+          git config --global user.name 'Checkpoint Agent'
+          git config --global user.email 'agent@codecheckpoint.local'
+          git add MASTER_CONTEXT.md
+          git commit -m "docs: regenerate MASTER_CONTEXT.md after PR #${{ github.event.pull_request.number }} merge" || echo "No changes to commit"
+          git push origin HEAD:${{ github.event.pull_request.base.ref }}

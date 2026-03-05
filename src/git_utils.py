@@ -102,3 +102,33 @@ def get_active_authors(days: int = 60, repo_path: str = ".") -> list[str]:
     """
     author_map = get_active_authors_with_last_commits(days, repo_path)
     return list(author_map.keys())
+
+def get_current_branch(repo_path: str = ".") -> str:
+    """Returns the name of the currently active branch."""
+    repo = get_repo(repo_path)
+    return repo.active_branch.name
+
+def get_diff_between_refs(base_ref: str, head_ref: str, repo_path: str = ".") -> str:
+    """
+    Returns the combined git diff between two refs (branches, SHAs, tags).
+    Useful for generating a full PR diff.
+    """
+    repo = get_repo(repo_path)
+    return repo.git.diff(base_ref, head_ref)
+
+def get_commits_between_refs(base_ref: str, head_ref: str, repo_path: str = ".") -> list[dict]:
+    """
+    Returns a list of commit metadata dicts for commits reachable from head_ref but not base_ref.
+    Each dict has: hash, author, email, date, message.
+    """
+    repo = get_repo(repo_path)
+    commits = []
+    for commit in repo.iter_commits(f"{base_ref}..{head_ref}"):
+        commits.append({
+            "hash": commit.hexsha,
+            "author": commit.author.name,
+            "email": commit.author.email,
+            "date": commit.committed_datetime.isoformat(),
+            "message": commit.message.strip()
+        })
+    return commits
