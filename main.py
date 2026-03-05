@@ -76,8 +76,7 @@ def process_catchup(email, config, last_commit_info=None):
         print(f"  Error: Failed to generate summary for {email} (LLM returned None).")
         return
 
-    username = last_commit['author']
-    filepath = save_catchup(result.summary_markdown, username, config.repository.output_dir)
+    filepath = save_catchup(result.summary_markdown, email, config.repository.output_dir)
     print(f"  Checkpoints updated: {filepath}")
 
 def main():
@@ -100,6 +99,7 @@ Examples:
     parser.add_argument("--config", action="store_true", help="Show current configuration")
     parser.add_argument("--uninstall", action="store_true", help="Uninstall git hook")
     parser.add_argument("--install-hook", action="store_true", help="Install git hook")
+    parser.add_argument("--stats", action="store_true", help="Show checkpoint statistics for this repository.")
     
     # Analysis commands
     parser.add_argument("--commit", help="Commit hash to analyze. Defaults to HEAD.", default=None)
@@ -107,6 +107,8 @@ Examples:
     parser.add_argument("--onboard", action="store_true", help="Generate a Master Context map for new joinees.")
     parser.add_argument("--catchup", nargs='?', const=True, default=None, help="Generate a Catchup summary. If no email is provided, uses local git config user.email.")
     parser.add_argument("--catchup-all", action="store_true", help="Generate Catchup summaries for ALL active developers.")
+    parser.add_argument("--pr", nargs=4, metavar=("PR_NUMBER", "BASE_REF", "HEAD_REF", "TITLE"),
+                        help="Generate PR summary. Args: PR_NUMBER BASE_REF HEAD_REF TITLE")
     
     # Configuration file override
     parser.add_argument("--config-file", default=".checkpoint.yaml", help="Path to configuration file")
@@ -135,6 +137,36 @@ Examples:
         config = load_config(args.config_file)
         success = install_hook(".", auto_catchup=config.features.auto_catchup)
         sys.exit(0 if success else 1)
+
+    if args.stats:
+        from src.storage import get_checkpoint_stats
+        stats = get_checkpoint_stats()
+        cp = stats["commit_checkpoints"]
+        print("\n📊 Checkpoint Statistics")
+        print("=" * 40)
+        print(f"  Commit checkpoints : {cp['count']}")
+        if cp["oldest"] and cp["newest"]:
+            if cp["oldest"] == cp["newest"]:
+                print(f"  Date range         : {cp['oldest']}")
+            else:
+                print(f"  Date range         : {cp['oldest']} → {cp['newest']}")
+        print(f"  Catchup files      : {len(stats['catchups'])}")
+        if stats["catchups"]:
+            for u in stats["catchups"]:
+                print(f"    - {u}")
+        print(f"  PR summaries       : {len(stats['pr_summaries'])}")
+        if stats["pr_summaries"]:
+            for p in stats["pr_summaries"]:
+                print(f"    - {p}")
+        print(f"  Contributing authors ({len(stats['authors'])}):")
+        for a in stats["authors"]:
+            print(f"    - {a}")
+        if stats["most_recent"]:
+            print(f"\n  Most recent checkpoints:")
+            for name in stats["most_recent"]:
+                print(f"    - {name}")
+        print()
+        sys.exit(0)
     
     # Load configuration
     config = load_config(args.config_file)
@@ -248,7 +280,87 @@ Examples:
             process_catchup(email, config)
             return
 
-        # MODE 4: STANDARD CHECKPOINT (Single Commit) - OPTIONAL / DEPRECATED DEFAULT
+        # MODE 4: PR SUMMARY
+        if args.pr:
+            from src.git_utils import get_diff_between_refs, get_commits_between_refs
+            from src.agents import PRSummaryGenerator
+            from src.storage import save_pr_summary
+
+            pr_number, base_ref, head_ref, pr_title = args.pr
+            print(f"Generating PR summary for PR #{pr_number}: {pr_title}")
+            print(f"  Base: {base_ref} → Head: {head_ref}")
+
+            # Get combined diff for all PR changes
+            combined_diff = get_diff_between_refs(base_ref, head_ref)
+            if not combined_diff.strip():
+                print("No diff found between refs.")
+                return
+
+            # Get individual commits in the PR
+            commits = get_commits_between_refs(base_ref, head_ref)
+            print(f"  Found {len(commits)} commits in PR range")
+
+            # Generate per-commit checkpoints and collect their content
+            from src.git_utils import get_diff, get_commit_metadata
+            from src.graph import app as graph_app
+
+            commit_checkpoint_parts = []
+            for commit_info in reversed(commits):  # chronological order
+                commit_hash = commit_info["hash"]
+                print(f"  Analyzing commit: {commit_hash[:8]} — {commit_info['message'][:60]}")
+                try:
+                    diff_content = get_diff(commit_hash)
+                    if not diff_content.strip():
+                        continue
+                    metadata = get_commit_metadata(commit_hash)
+                    initial_state = {
+                        "diff_content": diff_content,
+                        "commit_hash": commit_hash,
+                        "metadata": metadata,
+                        "generated_markdown": None,
+                        "filepath": None
+                    }
+                    final_state = graph_app.invoke(initial_state, {"recursion_limit": 10})
+                    if final_state and final_state.get("generated_markdown"):
+                        commit_checkpoint_parts.append(
+                            f"### Commit {commit_hash[:8]}: {commit_info['message']}\n\n"
+                            + final_state["generated_markdown"]
+                        )
+                except Exception as e:
+                    print(f"  Warning: Could not analyze commit {commit_hash[:8]}: {e}")
+
+            commit_checkpoints = "\n\n---\n\n".join(commit_checkpoint_parts) if commit_checkpoint_parts else "No individual commit checkpoints available."
+
+            head_branch = head_ref  # branch name passed directly from workflow
+
+            generator = PRSummaryGenerator()
+            result = generator(
+                pr_title=pr_title,
+                pr_number=pr_number,
+                base_branch=base_ref,
+                head_branch=head_branch,
+                combined_diff=combined_diff[:8000],  # Truncate very large diffs
+                commit_checkpoints=commit_checkpoints
+            )
+
+            if not result.pr_summary_markdown:
+                print("Error: Failed to generate PR summary (LLM returned None).")
+                return
+
+            if args.dry_run:
+                print("\n--- Generated PR Summary ---\n")
+                print(result.pr_summary_markdown)
+            else:
+                filepath = save_pr_summary(
+                    result.pr_summary_markdown,
+                    pr_number,
+                    head_branch,
+                    config.repository.output_dir
+                )
+                print(f"PR summary saved to: {filepath}")
+            return
+
+        # MODE 5: STANDARD CHECKPOINT (Single Commit) - OPTIONAL / DEPRECATED DEFAULT
         # Only run if explicitly requested via flag (we can add --standard later if needed)
         # For now, we only want targeted docs (Onboard / Catchup) or explicit commit analysis.
         
