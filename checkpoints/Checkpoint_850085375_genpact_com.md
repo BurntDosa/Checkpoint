@@ -1,36 +1,31 @@
 # While You Were Gone — Since 2026-02-11
-The default token limit for LLM configurations was increased from **2000 to 8000** in `src/llm.py` to reduce friction for use cases like code generation and multi-step reasoning. This is a **non-breaking change** but may impact cost/performance for teams relying on the previous default. No other updates were logged since your last activity.
-
----
+The past week saw a targeted CI/CD improvement to eliminate version skew between workflows and the local codebase. No application logic or APIs were modified, but workflows now install the project in editable mode (`pip install .`) instead of pulling from PyPI. This ensures PR testing and context updates use the exact code under review.
 
 ## Critical Changes (Must-Read)
-### Default Token Limit Increased in `configure_llm()`
-- **What changed**: The `configure_llm()` function in `src/llm.py` now defaults `max_tokens=8000` (up from 2000).
-- **Why it matters**:
-  - **Cost/Performance**: Higher defaults may increase API latency and token usage costs. Audit your LLM calls if you enforce strict budgets.
-  - **Assumptions**: Code assuming responses ≤2000 tokens (e.g., UI buffers, truncation logic) may need updates. Risk is low, as `max_tokens` was always overrideable.
-- **Action required**:
-  - Explicitly set `max_tokens=2000` in `configure_llm()` calls if you need the old behavior.
-  - Review tests mocking LLM responses to ensure they handle longer outputs.
-
----
+**None.** This update is purely a workflow improvement with no breaking changes or immediate action required.
 
 ## New Features & Additions
-*No new features or endpoints were added since 2026-02-11.*
-
----
+**None.** No new capabilities were introduced.
 
 ## Refactors & Structural Changes
-- The change to `configure_llm()` is isolated but touches a widely used utility. No architectural refactors or module reorganizations occurred.
-
----
+### CI/CD Workflow Fixes
+- **Problem**: Workflows previously installed the published `checkpoint-agent` package from PyPI, risking mismatches between tested code and the workflow environment (e.g., during PR validation).
+- **Solution**: Modified three jobs in `.github/workflows/checkpoint.yml` and its template to use `pip install .` (editable mode):
+  1. **Run Checkpoint Agent & Update Contexts** (line 30)
+  2. **Generate Per-Commit Checkpoints & PR Summary** (line 96)
+  3. **Regenerate Master Context** (line 160)
+- **Impact**:
+  - Workflows now reflect the repo’s current state, not a released version.
+  - No changes to job logic or outputs; only the installation method differs.
 
 ## New Dependencies & Config Changes
-*No new dependencies, environment variables, or configuration keys were added or modified.*
-
----
+**None.** The dependency graph remains unchanged.
 
 ## Current Focus Areas
-*No active focus areas or in-flight PRs were documented in this checkpoint.*
+- **CI/CD Reliability**: The team is prioritizing workflow consistency to reduce false negatives in PR testing.
+- **Next Steps**: Monitor for edge cases where editable-mode installs might behave differently (e.g., path resolution in submodules).
 
 ---
+**Action Items for You**:
+- If you encounter unexpected CI failures, verify whether the issue persists with `pip install .` locally.
+- No code changes are needed, but be aware that workflows now test *exactly* what’s in your PR branch.
