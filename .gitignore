@@ -213,3 +213,6 @@ __marimo__/
 checkpoints/              # Generated checkpoint files
 .checkpoint.log           # Hook execution logs
 .git/hooks/*.checkpoint-backup  # Hook backups
+
+# Git worktrees
+.worktrees/
