@@ -27,7 +27,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install checkpoint
-        run: pip install checkpoint-agent
+        run: pip install .
 
       - name: Run Checkpoint Agent & Update Contexts
         env:
@@ -93,7 +93,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install checkpoint
-        run: pip install checkpoint-agent
+        run: pip install .
 
       - name: Generate Per-Commit Checkpoints & PR Summary
         env:
@@ -156,7 +156,7 @@ jobs:
           python-version: '3.12'
 
       - name: Install checkpoint
-        run: pip install checkpoint-agent
+        run: pip install .
 
       - name: Regenerate Master Context
         env:
