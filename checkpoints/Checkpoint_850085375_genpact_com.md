@@ -1,6 +1,13 @@
 ---
 # **While You Were Gone — Since 2026-02-11 11:13:07+05:30**
-The team completed a **full migration from DSPy to LiteLLM** for LLM orchestration, collapsing 2 abstraction layers and cutting ~30% latency. This is a **breaking change** for any code interacting with `CheckpointGenerator`, `CatchupGenerator`, or other agent classes—but external APIs (inputs/outputs) remain identical. **You’ll need to update imports, mocks, and return-type handling immediately.** The team also **optimized the GitHub Actions workflow** for catchup summaries, fixing redundant processing and file staging issues.
+The team completed a **full migration from DSPy to LiteLLM** for LLM orchestration, collapsing 2 abstraction layers and cutting ~30% latency. This is a **breaking change** for any code interacting with `CheckpointGenerator`, `CatchupGenerator`, or other agent classes—but external APIs (inputs/outputs) remain identical. **You’ll need to update imports, mocks, and return-type handling immediately.**
+
+Additionally, **the GitHub Actions workflow for catchup summaries** was refined to:
+1. **Skip all committers in a push** (not just the most recent) to avoid redundant catchups.
+2. **Strictly avoid hallucinating metadata** (e.g., PR numbers, owners) in summaries unless explicitly stated in source checkpoints.
+3. **Fix file staging** to recursively capture all generated files in the `checkpoints/` directory.
+
+The **Checkpoint Agent’s CLI** now supports **comma-separated email lists** for `--catchup-skip`, improving multi-author workflows.
 
 ---
 
@@ -45,8 +52,35 @@ The team completed a **full migration from DSPy to LiteLLM** for LLM orchestrati
    - **What changed**:
      - **Skip Committer in Catchup Generation**: Added logic to exclude the committer’s own changes from their catchup summary (using `PUSHER_EMAIL` and `--catchup-skip`).
      - **Fixed File Staging**: Replaced `git add checkpoints/Checkpoint_*.md` with `git add checkpoints/` to recursively stage all generated files.
+     - **Multi-Committer Support**: The workflow now extracts **all unique author emails** in the push range (`github.event.before..github.sha`) and skips them via a comma-separated list:
+       ```bash
+       SKIP_EMAILS=$(git log --format='%ae' ${{ github.event.before }}..${{ github.sha }} 2>/dev/null | sort -u | tr '\n' ',' | sed 's/,$//')
+       checkpoint --catchup-all --catchup-skip "$SKIP_EMAILS"
+       ```
    - **Action required**:
      - Review the updated workflow for edge cases (e.g., nested files, multiple committers).
+
+### 6. **CLI Argument Parsing for Multi-Skip**
+   - **File**: `checkpoint_agent/__main__.py`
+   - **What changed**:
+     - The `--catchup-skip` argument now accepts **comma-separated emails** (e.g., `--catchup-skip "dev1@company.com,dev2@company.com"`).
+     - Logic updated to split and normalize emails (case-insensitive, stripped of whitespace):
+       ```python
+       skip_emails = {e.strip().lower() for e in args.catchup_skip.split(",") if e.strip()}
+       ```
+   - **Action required**:
+     - Update any scripts or calls using `--catchup-skip` to use the new comma-separated format if needed.
+
+### 7. **Catchup Template Clarity**
+   - **File**: `checkpoint_agent/agents.py`
+   - **What changed**:
+     - Renamed the `"## Current Focus Areas"` section to `"## What's In Progress"` and added a **strict disclaimer** to prevent the LLM from hallucinating metadata:
+       ```
+       IMPORTANT: Only include information that is explicitly stated in the checkpoints.
+       Do not invent team member names, owners, PR numbers, or work items.
+       ```
+   - **Action required**:
+     - Review generated catchups to ensure no invented metadata (e.g., "Alice is working on PR #123") appears unless explicitly sourced from checkpoints.
 
 ---
 
@@ -85,75 +119,18 @@ The team completed a **full migration from DSPy to LiteLLM** for LLM orchestrati
      - Added an optional `config` parameter to `_App.invoke()` (Line 25) for future pipeline configuration.
    - **Why it matters**: Forward-compatible change; no breaking impact on existing calls.
 
+### 5. **Multi-Committer Skip Logic**
+   - **Files**: `.github/workflows/checkpoint.yml`, `checkpoint_agent/__main__.py`
+   - **What’s new**:
+     - The `--catchup-skip` flag now supports **multiple emails** (comma-separated), enabling the workflow to skip **all authors** in a push (e.g., co-authored commits, rebased branches).
+     - The workflow dynamically extracts unique emails from `git log` and passes them as a list.
+   - **Why it matters**:
+     - Eliminates redundant catchup generation for committers in the same push.
+     - Handles edge cases like squashed merges or multi-author commits.
+
 ---
 
 ## **Refactors & Structural Changes**
 ### 1. **Agent Classes Simplified**
    - **File**: `checkpoint_agent/agents.py`
-   - **Before**: 520 lines (DSPy signatures + modules).
-   - **After**: 160 lines (raw prompts + `_call_llm`).
-   - **Key changes**:
-     - `CheckpointGenerator`, `CatchupGenerator`, etc. now have a single `__call__` method.
-     - Removed `LegacyCheckpointGenerator` (consolidated into `CheckpointGenerator`).
-
-### 2. **Prompt Construction Centralized**
-   - **File**: `checkpoint_agent/agents.py`
-   - **Pattern**: All prompts now follow this structure:
-     ```python
-     def __call__(self, input_data):
-         system_prompt = "You are a... [static role]"
-         user_prompt = f"Process this input: {input_data}"
-         return _call_llm(system_prompt, user_prompt)
-     ```
-   - **Why**: Easier to debug/modify prompts without DSPy’s abstraction.
-
-### 3. **Helper Functions Cleaned Up**
-   - **File**: `checkpoint_agent/agents.py`
-   - **Changes**:
-     - `strip_code_fences()`: Simplified logic (removed redundant regex checks).
-     - Removed unused utilities like `format_dspy_examples()`.
-
----
-
-## **New Dependencies & Config Changes**
-### 1. **Dependencies**
-   | **Added** | **Removed**       | **Changed** |
-   |-----------|-------------------|-------------|
-   | None      | `dspy-ai>=2.0.0`  | None        |
-
-### 2. **Environment Variables**
-   - **Removed**:
-     - `DSPY_API_KEY` (replaced by provider-specific keys, e.g., `MISTRAL_API_KEY`).
-   - **Added**: None.
-
-### 3. **Config Keys**
-   - **File**: `checkpoint_agent/llm.py`
-   - **New**:
-     - `_llm_config` (dict) replaces `dspy.settings`.
-     - Example:
-       ```python
-       _llm_config = {
-           "model": "mistral/mistral-small-latest",  # LiteLLM routing format
-           "temperature": 0.3,
-           "max_tokens": 4096,
-       }
-       ```
-
----
-
-## **Current Focus Areas**
-### 1. **Stabilizing the Migration (Top Priority)**
-   - **Owners**: @alice (backend), @bob (testing)
-   - **Status**:
-     - **Done**: Core migration (PR #420).
-     - **In Progress**:
-       - Observability: Adding `litellm.success_callback` for logging (PR #423).
-       - Error handling: Validating `_llm_config` params (PR #424).
-     - **Blockers**: None.
-   - **How to help**:
-     - Test edge cases (e.g., empty inputs, long contexts) in staging.
-     - Review PR #423 for callback logic.
-
-### 2. **Prompt Optimization**
-   - **Owner**: @carol
-   - **Goal**: Tweak manual prompts for better output consistency (vs. DSPy’s structured signatures).
+   - **Before**: 5
