@@ -22,7 +22,7 @@ def run_pipeline(diff_content: str, commit_hash: str, metadata: dict) -> dict:
 
 
 class _App:
-    def invoke(self, state: dict) -> dict:
+    def invoke(self, state: dict, **kwargs) -> dict:
         return run_pipeline(
             diff_content=state["diff_content"],
             commit_hash=state["commit_hash"],
