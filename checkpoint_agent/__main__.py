@@ -155,7 +155,7 @@ Examples:
     parser.add_argument("--onboard", action="store_true", help="Generate a Master Context map for new joinees.")
     parser.add_argument("--catchup", nargs='?', const=True, default=None, help="Generate a Catchup summary. If no email is provided, uses local git config user.email.")
     parser.add_argument("--catchup-all", action="store_true", help="Generate Catchup summaries for ALL active developers.")
-    parser.add_argument("--catchup-skip", metavar="EMAIL", help="Skip this email address when running --catchup-all (e.g. the committer).")
+    parser.add_argument("--catchup-skip", metavar="EMAILS", help="Comma-separated email addresses to skip when running --catchup-all (e.g. the committers).")
     parser.add_argument("--pr", nargs=4, metavar=("PR_NUMBER", "BASE_REF", "HEAD_REF", "TITLE"),
                         help="Generate PR summary. Args: PR_NUMBER BASE_REF HEAD_REF TITLE")
     
@@ -303,14 +303,16 @@ Examples:
             import time
 
             print("Running Automated Catchup for ALL active developers...")
-            skip_email = args.catchup_skip.lower() if args.catchup_skip else None
+            skip_emails = set()
+            if args.catchup_skip:
+                skip_emails = {e.strip().lower() for e in args.catchup_skip.split(",") if e.strip()}
 
             # Single-pass optimization: get all authors + last commits at once
             author_map = get_active_authors_with_last_commits(days=60, max_count=1000)
 
             processed = 0
             for email, last_commit_info in author_map.items():
-                if skip_email and email.lower() == skip_email:
+                if email.lower() in skip_emails:
                     print(f"Skipping {email} (committer — already up to date)")
                     continue
 

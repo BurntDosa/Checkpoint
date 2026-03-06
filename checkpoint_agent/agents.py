@@ -120,7 +120,9 @@ class CatchupGenerator:
                 "## New Features & Additions (new capabilities, endpoints, modules added)\n"
                 "## Refactors & Structural Changes (reorganizations, renames, performance improvements)\n"
                 "## New Dependencies & Config Changes (new packages, env vars, config keys added or changed)\n"
-                "## Current Focus Areas (what the team is actively working on, what PRs/features are in flight)\n\n"
+                "## What's In Progress (based only on what's mentioned in the checkpoints — do NOT invent names, owners, or PR numbers)\n\n"
+                "IMPORTANT: Only include information that is explicitly stated in the checkpoints. "
+                "Do not invent team member names, owners, PR numbers, or work items.\n\n"
                 "Target length: 500-1000 words.\n\n"
                 f"Checkpoints to summarize:\n{checkpoints_content}"
             )
