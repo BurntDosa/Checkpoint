@@ -1,10 +1,8 @@
 from typing import TypedDict, Optional
-from concurrent.futures import ThreadPoolExecutor
 from langgraph.graph import StateGraph, END
 from checkpoint_agent.agents import CheckpointGenerator
 from checkpoint_agent.storage import save_checkpoint
 from checkpoint_agent.llm import configure_llm
-import os
 
 # Define the state of the graph
 class GraphState(TypedDict):
@@ -13,9 +11,6 @@ class GraphState(TypedDict):
     metadata: dict
     generated_markdown: Optional[str]
     filepath: Optional[str]
-
-# Thread executor for background indexing
-_indexing_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="indexing")
 
 # Node: Configuration
 def configure_env(state: GraphState):
@@ -34,46 +29,16 @@ def save_output(state: GraphState):
     filepath = save_checkpoint(state["generated_markdown"], state["commit_hash"], author=author)
     return {"filepath": filepath}
 
-# Node: Indexing (synchronous for reliability)
-def index_output(state: GraphState):
-    """
-    Index checkpoint in ChromaDB if vector_db feature is enabled.
-    Runs synchronously to ensure completion before program exit.
-    """
-    try:
-        # Lazy import to avoid loading ChromaDB unless needed
-        from checkpoint_agent.config import load_config
-        config = load_config()
-        
-        # Only index if vector_db is enabled
-        if not config or not config.features.vector_db:
-            return state
-            
-        from checkpoint_agent.vector_db import VectorDB
-        db = VectorDB()
-        db.add_checkpoint(
-            checkpoint_id=state["commit_hash"],
-            content=state["generated_markdown"],
-            metadata=state["metadata"]
-        )
-    except Exception as e:
-        # Log errors but don't crash the workflow
-        print(f"Warning: Indexing failed: {e}")
-    
-    return state
-
 # Build the Graph
 workflow = StateGraph(GraphState)
 
 workflow.add_node("configure", configure_env)
 workflow.add_node("analyze", analyze_diff)
 workflow.add_node("save", save_output)
-workflow.add_node("index", index_output)
 
 workflow.set_entry_point("configure")
 workflow.add_edge("configure", "analyze")
 workflow.add_edge("analyze", "save")
-workflow.add_edge("save", "index")
-workflow.add_edge("index", END)
+workflow.add_edge("save", END)
 
 app = workflow.compile()

@@ -12,21 +12,16 @@ class TestCheckpointWorkflow(unittest.TestCase):
     @patch("checkpoint_agent.graph.configure_llm")
     @patch("checkpoint_agent.graph.CheckpointGenerator")
     @patch("checkpoint_agent.graph.save_checkpoint")
-    @patch("checkpoint_agent.vector_db.VectorDB")
-    def test_full_workflow(self, mock_vector_db, mock_save, mock_generator_cls, mock_configure):
+    def test_full_workflow(self, mock_save, mock_generator_cls, mock_configure):
         # Setup Mocks
-        
+
         # Mock Generator
         mock_generator_instance = MagicMock()
         mock_generator_instance.return_value.markdown_content = "# Generated Checkpoint"
         mock_generator_cls.return_value = mock_generator_instance
-        
+
         # Mock Save
         mock_save.return_value = "/path/to/checkpoints/2023-01-01-abcdef.md"
-        
-        # Mock VectorDB
-        mock_db_instance = MagicMock()
-        mock_vector_db.return_value = mock_db_instance
 
         # Initial State
         initial_state = {
@@ -53,13 +48,6 @@ class TestCheckpointWorkflow(unittest.TestCase):
         
         # 4. Save should be called
         mock_save.assert_called_once_with("# Generated Checkpoint", "abcdef123456", author="Test User")
-        
-        # 5. VectorDB should index the content
-        mock_db_instance.add_checkpoint.assert_called_once_with(
-            checkpoint_id="abcdef123456",
-            content="# Generated Checkpoint",
-            metadata=initial_state["metadata"]
-        )
         
         print("\nTest passed! Workflow successfully simulated.")
 

@@ -2,7 +2,6 @@ langgraph
 dspy-ai
 litellm
 httpx
-chromadb
 gitpython
 pydantic
 python-dotenv

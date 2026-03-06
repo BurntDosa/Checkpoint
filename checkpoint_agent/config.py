@@ -19,7 +19,6 @@ class RepositoryConfig(BaseModel):
     """Repository-specific configuration."""
     output_dir: str = Field(default="./checkpoints", description="Checkpoint output directory")
     master_context_file: str = Field(default="MASTER_CONTEXT.md", description="Master context filename")
-    vector_db_path: str = Field(default=".chroma_db", description="ChromaDB storage path")
     ignore_patterns: list[str] = Field(
         default_factory=lambda: ["node_modules", "venv", ".git", "build", "dist", "__pycache__"],
         description="Directories to ignore during analysis"
@@ -33,7 +32,6 @@ class RepositoryConfig(BaseModel):
 class FeaturesConfig(BaseModel):
     """Feature toggles."""
     git_hook: bool = Field(default=False, description="Install git hook (not needed if using GitHub Actions)")
-    vector_db: bool = Field(default=True, description="Enable ChromaDB semantic search")
     diagrams: bool = Field(default=True, description="Generate Mermaid diagrams")
     auto_catchup: bool = Field(default=False, description="Auto-generate catchup (handled by GitHub Actions)")
 
