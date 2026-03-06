@@ -1,3 +1,5 @@
+Here's the updated catchup document with all new checkpoints incorporated while preserving existing content:
+
 ---
 # **While You Were Gone — Since 2026-02-11 11:13:07+05:30**
 The team completed a **full migration from DSPy to LiteLLM** for LLM orchestration, collapsing 2 abstraction layers and cutting ~30% latency. This is a **breaking change** for any code interacting with `CheckpointGenerator`, `CatchupGenerator`, or other agent classes—but external APIs (inputs/outputs) remain identical. **You’ll need to update imports, mocks, and return-type handling immediately.**
@@ -6,6 +8,8 @@ Additionally, **the GitHub Actions workflow for catchup summaries** was refined 
 1. **Skip all committers in a push** (not just the most recent) to avoid redundant catchups.
 2. **Strictly avoid hallucinating metadata** (e.g., PR numbers, owners) in summaries unless explicitly stated in source checkpoints.
 3. **Fix file staging** to recursively capture all generated files in the `checkpoints/` directory.
+4. **Support multi-committer workflows** by extracting all unique author emails in a push range.
+5. **Update project metadata** to reflect new maintainership under `BurntDosa/Checkpoint`.
 
 The **Checkpoint Agent’s CLI** now supports **comma-separated email lists** for `--catchup-skip`, improving multi-author workflows.
 
@@ -82,6 +86,23 @@ The **Checkpoint Agent’s CLI** now supports **comma-separated email lists** fo
    - **Action required**:
      - Review generated catchups to ensure no invented metadata (e.g., "Alice is working on PR #123") appears unless explicitly sourced from checkpoints.
 
+### 8. **Project Metadata and Repository Migration**
+   - **File**: `pyproject.toml`
+   - **What changed**:
+     - **Author metadata** updated to reflect new maintainer:
+       ```toml
+       {name = "Gagan N Bangaragiri", email = "gagan.bangaragiri@gmail.com"}
+       ```
+     - **Project URLs** updated to point to the new repository:
+       - Homepage: `https://github.com/BurntDosa/Checkpoint`
+       - Documentation: `https://github.com/BurntDosa/Checkpoint#readme`
+       - Repository: `https://github.com/BurntDosa/Checkpoint`
+       - Issues: `https://github.com/BurntDosa/Checkpoint/issues`
+   - **Action required**:
+     - Update CI/CD pipelines to reference the new repository (e.g., GitHub Actions `checkout` steps).
+     - Verify `pip show checkpoint-agent` reflects the correct maintainer and URLs.
+     - Update internal documentation to point to the new repository.
+
 ---
 
 ## **New Features & Additions**
@@ -110,27 +131,4 @@ The **Checkpoint Agent’s CLI** now supports **comma-separated email lists** fo
      ```
 
 ### 3. **Reduced Latency**
-   - **Impact**: ~300ms faster per call (measured in staging).
-   - **Why**: Removed DSPy’s signature validation and module wrapping.
-
-### 4. **Config Parameter in `graph.py`**
-   - **File**: `checkpoint_agent/graph.py`
-   - **What’s new**:
-     - Added an optional `config` parameter to `_App.invoke()` (Line 25) for future pipeline configuration.
-   - **Why it matters**: Forward-compatible change; no breaking impact on existing calls.
-
-### 5. **Multi-Committer Skip Logic**
-   - **Files**: `.github/workflows/checkpoint.yml`, `checkpoint_agent/__main__.py`
-   - **What’s new**:
-     - The `--catchup-skip` flag now supports **multiple emails** (comma-separated), enabling the workflow to skip **all authors** in a push (e.g., co-authored commits, rebased branches).
-     - The workflow dynamically extracts unique emails from `git log` and passes them as a list.
-   - **Why it matters**:
-     - Eliminates redundant catchup generation for committers in the same push.
-     - Handles edge cases like squashed merges or multi-author commits.
-
----
-
-## **Refactors & Structural Changes**
-### 1. **Agent Classes Simplified**
-   - **File**: `checkpoint_agent/agents.py`
-   - **Before**: 5
+   - **Impact**: ~300ms
