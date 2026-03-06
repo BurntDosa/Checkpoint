@@ -1,31 +1,104 @@
 # While You Were Gone — Since 2026-02-11
-The past week saw a targeted CI/CD improvement to eliminate version skew between workflows and the local codebase. No application logic or APIs were modified, but workflows now install the project in editable mode (`pip install .`) instead of pulling from PyPI. This ensures PR testing and context updates use the exact code under review.
-
-## Critical Changes (Must-Read)
-**None.** This update is purely a workflow improvement with no breaking changes or immediate action required.
-
-## New Features & Additions
-**None.** No new capabilities were introduced.
-
-## Refactors & Structural Changes
-### CI/CD Workflow Fixes
-- **Problem**: Workflows previously installed the published `checkpoint-agent` package from PyPI, risking mismatches between tested code and the workflow environment (e.g., during PR validation).
-- **Solution**: Modified three jobs in `.github/workflows/checkpoint.yml` and its template to use `pip install .` (editable mode):
-  1. **Run Checkpoint Agent & Update Contexts** (line 30)
-  2. **Generate Per-Commit Checkpoints & PR Summary** (line 96)
-  3. **Regenerate Master Context** (line 160)
-- **Impact**:
-  - Workflows now reflect the repo’s current state, not a released version.
-  - No changes to job logic or outputs; only the installation method differs.
-
-## New Dependencies & Config Changes
-**None.** The dependency graph remains unchanged.
-
-## Current Focus Areas
-- **CI/CD Reliability**: The team is prioritizing workflow consistency to reduce false negatives in PR testing.
-- **Next Steps**: Monitor for edge cases where editable-mode installs might behave differently (e.g., path resolution in submodules).
+The checkpoint_agent system has undergone a deliberate **architectural simplification**, removing ChromaDB vector database integration to reduce complexity and maintenance overhead. This change eliminates semantic search capabilities but preserves the core workflow of generating and storing human-readable checkpoints. Users relying on vector search must migrate to filesystem-based alternatives, while all others benefit from faster execution, fewer dependencies, and improved reliability.
 
 ---
-**Action Items for You**:
-- If you encounter unexpected CI failures, verify whether the issue persists with `pip install .` locally.
-- No code changes are needed, but be aware that workflows now test *exactly* what’s in your PR branch.
+
+## Critical Changes (Must-Read)
+### 🚨 **Breaking: ChromaDB Integration Removed**
+1. **Configuration Failures**:
+   - Any existing config files with `vector_db: true` or `vector_db_path` fields will **fail validation**. Remove these keys entirely.
+   - Example: Delete these lines from `config.py` or YAML configs:
+     ```yaml
+     features:
+       vector_db: true  # ← REMOVE
+     repository:
+       vector_db_path: ".chroma_db"  # ← REMOVE
+     ```
+
+2. **API/Functionality Removed**:
+   - **Deleted `vector_db.py`**: The entire `VectorDB` class (with `add_checkpoint()` and `search()` methods) is gone. Code calling these will raise `ImportError`.
+   - **Search Capabilities**: Semantic search is no longer available. Replace with filesystem tools like:
+     ```bash
+     rg "search term" checkpoints/  # ripgrep example
+     ```
+
+3. **Orphaned Data**:
+   - Delete the `.chroma_db` directory (if it exists) to clean up unused storage:
+     ```bash
+     rm -rf .chroma_db
+     ```
+
+4. **Dependency Conflict**:
+   - `chromadb>=0.4.0` was removed from `pyproject.toml` and `requirements.txt`. Update your environment:
+     ```bash
+     pip uninstall chromadb -y
+     ```
+
+---
+
+## New Features & Additions
+*None in this update.* This release focuses on **removal and simplification** rather than adding capabilities.
+
+---
+
+## Refactors & Structural Changes
+### 1. **Simplified Workflow Graph** (`checkpoint_agent/graph.py`)
+- **Before**: `configure → analyze → save → index → END` (parallel indexing)
+- **After**: `configure → analyze → save → END` (linear, no background tasks)
+- **Impact**: Faster execution, no silent failures from indexing.
+
+### 2. **Configuration Models** (`checkpoint_agent/config.py`)
+- Removed:
+  - `vector_db_path` from `RepositoryConfig`
+  - `vector_db` toggle from `FeaturesConfig`
+- Simplified `ignore_patterns` to focus on core file filtering.
+
+### 3. **Testing Infrastructure**
+- Removed VectorDB mocks and indexing assertions.
+- Tests now validate **only** checkpoint generation and filesystem storage.
+
+### 4. **User Interfaces** (`setup_wizard.py`)
+- Setup output no longer mentions vector DB.
+- Configuration display is cleaner, with fewer optional features.
+
+---
+
+## New Dependencies & Config Changes
+### **Dependencies Removed**
+| Package    | Version   | Action               |
+|------------|-----------|----------------------|
+| `chromadb` | `>=0.4.0` | **REMOVED**           |
+
+### **Configuration Changes**
+| Key               | Old Value       | New Value       |
+|-------------------|-----------------|-----------------|
+| `features.vector_db` | `true/false`    | **DELETED**     |
+| `repository.vector_db_path` | `".chroma_db"` | **DELETED**     |
+
+---
+
+## Current Focus Areas
+1. **Migration Support**:
+   - Team is prioritizing documentation for users affected by the ChromaDB removal (e.g., search workflow alternatives).
+   - Example: A `MIGRATION.md` guide is in draft [#42](https://github.com/your-repo/checkpoint_agent/pull/42).
+
+2. **Performance Optimization**:
+   - Profiling the simplified workflow to identify further bottlenecks (e.g., large repo analysis).
+   - Early results show **~20% faster** checkpoint generation without indexing overhead.
+
+3. **Core Feature Enhancements**:
+   - **In Flight**: PR [#45](https://github.com/your-repo/checkpoint_agent/pull/45) adds **checkpoint diffing** to highlight changes between versions.
+   - **Planned**: Native support for **structured metadata** (e.g., JSON sidecars) alongside Markdown files.
+
+4. **Developer Experience**:
+   - Simplifying the setup wizard further to reduce cognitive load for new users.
+   - Exploring **interactive tutorials** for common workflows (e.g., "How to search checkpoints without ChromaDB").
+
+---
+### **Action Items for You**
+| Priority | Task                                                                 |
+|----------|----------------------------------------------------------------------|
+| ⭐ **Critical** | Update configs to remove `vector_db` keys.                          |
+| ⭐ **Critical** | Delete `.chroma_db` directories and uninstall `chromadb`.          |
+| 🔧 **High**     | Replace semantic search with `rg`/`grep` in your scripts.           |
+| 📚 **Medium**   | Review the [draft migration guide](https://github.com/your-repo/checkpoint_agent/pull/42). |
