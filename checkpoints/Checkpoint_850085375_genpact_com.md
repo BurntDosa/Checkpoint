@@ -1,6 +1,6 @@
 ---
 # **While You Were Gone — Since 2026-02-11 11:13:07+05:30**
-The team completed a **full migration from DSPy to LiteLLM** for LLM orchestration, collapsing 2 abstraction layers and cutting ~30% latency. This is a **breaking change** for any code interacting with `CheckpointGenerator`, `CatchupGenerator`, or other agent classes—but external APIs (inputs/outputs) remain identical. **You’ll need to update imports, mocks, and return-type handling immediately.** The team is now focused on stabilizing the new architecture and adding observability.
+The team completed a **full migration from DSPy to LiteLLM** for LLM orchestration, collapsing 2 abstraction layers and cutting ~30% latency. This is a **breaking change** for any code interacting with `CheckpointGenerator`, `CatchupGenerator`, or other agent classes—but external APIs (inputs/outputs) remain identical. **You’ll need to update imports, mocks, and return-type handling immediately.** The team also **optimized the GitHub Actions workflow** for catchup summaries, fixing redundant processing and file staging issues.
 
 ---
 
@@ -40,6 +40,14 @@ The team completed a **full migration from DSPy to LiteLLM** for LLM orchestrati
      - Run `pip uninstall dspy-ai` locally.
      - Update CI/CD pipelines to remove DSPy installation.
 
+### 5. **GitHub Actions Workflow Fixes**
+   - **File**: `.github/workflows/checkpoint.yml`
+   - **What changed**:
+     - **Skip Committer in Catchup Generation**: Added logic to exclude the committer’s own changes from their catchup summary (using `PUSHER_EMAIL` and `--catchup-skip`).
+     - **Fixed File Staging**: Replaced `git add checkpoints/Checkpoint_*.md` with `git add checkpoints/` to recursively stage all generated files.
+   - **Action required**:
+     - Review the updated workflow for edge cases (e.g., nested files, multiple committers).
+
 ---
 
 ## **New Features & Additions**
@@ -70,6 +78,12 @@ The team completed a **full migration from DSPy to LiteLLM** for LLM orchestrati
 ### 3. **Reduced Latency**
    - **Impact**: ~300ms faster per call (measured in staging).
    - **Why**: Removed DSPy’s signature validation and module wrapping.
+
+### 4. **Config Parameter in `graph.py`**
+   - **File**: `checkpoint_agent/graph.py`
+   - **What’s new**:
+     - Added an optional `config` parameter to `_App.invoke()` (Line 25) for future pipeline configuration.
+   - **Why it matters**: Forward-compatible change; no breaking impact on existing calls.
 
 ---
 
@@ -143,20 +157,3 @@ The team completed a **full migration from DSPy to LiteLLM** for LLM orchestrati
 ### 2. **Prompt Optimization**
    - **Owner**: @carol
    - **Goal**: Tweak manual prompts for better output consistency (vs. DSPy’s structured signatures).
-   - **Status**:
-     - Draft prompts for `CatchupGenerator` in [PR #425](https://github.com/your-repo/checkpoint-agent/pull/425).
-   - **Action**: Review and suggest improvements for your use case (e.g., PR summaries).
-
-### 3. **Provider Flexibility**
-   - **Owner**: @dave
-   - **Goal**: Test LiteLLM routing with non-Mistral providers (e.g., Anthropic, Cohere).
-   - **Status**:
-     - Basic routing works; need to validate output quality.
-   - **Action**: Try switching `_llm_config["model"]` to `"claude-3-haiku"` and report issues.
-
-### 4. **Documentation Update**
-   - **Owner**: @eve
-   - **Goal**: Update internal docs to reflect LiteLLM usage.
-   - **Status**:
-     - Draft in [Google Doc](https://docs.google.com/your-doc).
-   - **Action**: Skim and add missing details (e.g., prompt construction guidelines).
