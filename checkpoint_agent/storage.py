@@ -206,6 +206,14 @@ def save_master_context(content: str, filename: str = "MASTER_CONTEXT.md") -> st
         f.write(content)
     return os.path.abspath(file_path)
 
+def get_catchup_path(email: str, checkpoint_dir: str = None) -> str:
+    """Returns the path to the user's catchup file (may not exist yet)."""
+    if checkpoint_dir is None:
+        checkpoint_dir = CHECKPOINT_DIR
+    safe_email = "".join([c if c.isalnum() else "_" for c in email])
+    return os.path.join(checkpoint_dir, f"Checkpoint_{safe_email}.md")
+
+
 def save_catchup(content: str, email: str, checkpoint_dir: str = None) -> str:
     """
     Overwrites the user's catchup file in the checkpoints directory.

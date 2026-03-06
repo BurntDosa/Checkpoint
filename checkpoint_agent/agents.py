@@ -79,30 +79,51 @@ class CheckpointGenerator:
 
 class CatchupGenerator:
     """
-    Generates a 'While You Were Gone' briefing for a returning developer.
+    Generates or updates a 'While You Were Gone' briefing for a returning developer.
     Replaces DSPy CatchupSummarizer + CatchupGenerator.
     """
-    def __call__(self, checkpoints_content: str, user_last_active_date: str) -> SimpleNamespace:
-        system = (
-            "You are writing a personalized 'While You Were Gone' briefing for a developer returning to the codebase. "
-            "Your goal is to get them fully up to speed in one read — covering what changed, what's new, what broke, "
-            "and what they need to act on immediately. Be direct, specific, and prioritize ruthlessly. "
-            "Name specific files, functions, modules, and authors where relevant. "
-            "Target length: 500-1000 words."
-        )
-        user = (
-            f"Write a catchup briefing for a developer who was last active on {user_last_active_date}.\n\n"
-            "MUST include exactly these sections in order:\n"
-            f"# While You Were Gone — Since {user_last_active_date}\n"
-            "(2-3 sentence executive summary of the period)\n"
-            "## Critical Changes (Must-Read) (breaking changes, API changes, anything that will block their work immediately)\n"
-            "## New Features & Additions (new capabilities, endpoints, modules added)\n"
-            "## Refactors & Structural Changes (reorganizations, renames, performance improvements)\n"
-            "## New Dependencies & Config Changes (new packages, env vars, config keys added or changed)\n"
-            "## Current Focus Areas (what the team is actively working on, what PRs/features are in flight)\n\n"
-            "Target length: 500-1000 words.\n\n"
-            f"Checkpoints to summarize:\n{checkpoints_content}"
-        )
+    def __call__(self, checkpoints_content: str, user_last_active_date: str,
+                 existing_catchup: str = None) -> SimpleNamespace:
+        if existing_catchup:
+            system = (
+                "You are maintaining a 'While You Were Gone' briefing for a developer. "
+                "An existing catchup document exists — update it to incorporate new changes. "
+                "Preserve ALL information from the existing document. Add new information under the "
+                "appropriate sections or append new sections for major new changes. "
+                "Do not remove or contradict existing information. "
+                "Name specific files, functions, modules, and authors where relevant."
+            )
+            user = (
+                f"Update this catchup document with new checkpoints.\n\n"
+                "Rules:\n"
+                "- Keep ALL existing content intact\n"
+                "- Add new information from the checkpoints below into the appropriate sections\n"
+                "- If a section already covers a topic, extend it rather than duplicate it\n"
+                "- Update the executive summary to reflect the full period\n\n"
+                f"Existing catchup document:\n{existing_catchup}\n\n"
+                f"New checkpoints to incorporate:\n{checkpoints_content}"
+            )
+        else:
+            system = (
+                "You are writing a personalized 'While You Were Gone' briefing for a developer returning to the codebase. "
+                "Your goal is to get them fully up to speed in one read — covering what changed, what's new, what broke, "
+                "and what they need to act on immediately. Be direct, specific, and prioritize ruthlessly. "
+                "Name specific files, functions, modules, and authors where relevant. "
+                "Target length: 500-1000 words."
+            )
+            user = (
+                f"Write a catchup briefing for a developer who was last active on {user_last_active_date}.\n\n"
+                "MUST include exactly these sections in order:\n"
+                f"# While You Were Gone — Since {user_last_active_date}\n"
+                "(2-3 sentence executive summary of the period)\n"
+                "## Critical Changes (Must-Read) (breaking changes, API changes, anything that will block their work immediately)\n"
+                "## New Features & Additions (new capabilities, endpoints, modules added)\n"
+                "## Refactors & Structural Changes (reorganizations, renames, performance improvements)\n"
+                "## New Dependencies & Config Changes (new packages, env vars, config keys added or changed)\n"
+                "## Current Focus Areas (what the team is actively working on, what PRs/features are in flight)\n\n"
+                "Target length: 500-1000 words.\n\n"
+                f"Checkpoints to summarize:\n{checkpoints_content}"
+            )
         content = strip_code_fences(_call_llm(system, user))
         return SimpleNamespace(summary_markdown=content)
 

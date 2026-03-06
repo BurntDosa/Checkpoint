@@ -78,39 +78,53 @@ def process_catchup(email, config, last_commit_info=None):
     """Helper to process catchup for a single email."""
     # Lazy imports to avoid loading heavy dependencies for setup commands
     from checkpoint_agent.agents import CatchupGenerator
-    from checkpoint_agent.storage import get_checkpoints_since, save_catchup
-    
+    from checkpoint_agent.storage import get_checkpoints_since, save_catchup, get_catchup_path
+
     print(f"Generating Catchup Summary for user: {email}")
-    
+
     # Use precomputed last_commit_info if available (performance optimization)
     if last_commit_info is None:
         from checkpoint_agent.git_utils import get_last_commit_by_author
         last_commit = get_last_commit_by_author(email)
     else:
         last_commit = last_commit_info
-    
+
     if not last_commit:
         print(f"  No commit history found for {email}. Skipping.")
         return
-        
+
     print(f"  Last active: {last_commit['date']} (Commit: {last_commit['hash'][:8]})")
-    
+
     checkpoints = get_checkpoints_since(last_commit['date'])
     if not checkpoints:
         print("  No checkpoints found since last activity.")
         return
-        
+
     combined_content = "\n\n".join(checkpoints)
-    
+
+    # Read existing catchup to preserve accumulated history
+    existing_catchup = None
+    catchup_path = get_catchup_path(email, config.repository.output_dir)
+    if os.path.exists(catchup_path):
+        try:
+            with open(catchup_path, "r", encoding="utf-8") as f:
+                existing_catchup = f.read()
+        except Exception:
+            pass
+
     generator = CatchupGenerator()
-    result = generator(checkpoints_content=combined_content, user_last_active_date=str(last_commit['date']))
-    
+    result = generator(
+        checkpoints_content=combined_content,
+        user_last_active_date=str(last_commit['date']),
+        existing_catchup=existing_catchup,
+    )
+
     if not result.summary_markdown:
         print(f"  Error: Failed to generate summary for {email} (LLM returned None).")
         return
 
     filepath = save_catchup(result.summary_markdown, email, config.repository.output_dir)
-    print(f"  Checkpoints updated: {filepath}")
+    print(f"  Catchup updated: {filepath}")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -141,6 +155,7 @@ Examples:
     parser.add_argument("--onboard", action="store_true", help="Generate a Master Context map for new joinees.")
     parser.add_argument("--catchup", nargs='?', const=True, default=None, help="Generate a Catchup summary. If no email is provided, uses local git config user.email.")
     parser.add_argument("--catchup-all", action="store_true", help="Generate Catchup summaries for ALL active developers.")
+    parser.add_argument("--catchup-skip", metavar="EMAIL", help="Skip this email address when running --catchup-all (e.g. the committer).")
     parser.add_argument("--pr", nargs=4, metavar=("PR_NUMBER", "BASE_REF", "HEAD_REF", "TITLE"),
                         help="Generate PR summary. Args: PR_NUMBER BASE_REF HEAD_REF TITLE")
     
@@ -286,18 +301,26 @@ Examples:
         if args.catchup_all:
             from checkpoint_agent.git_utils import get_active_authors_with_last_commits
             import time
-            
+
             print("Running Automated Catchup for ALL active developers...")
+            skip_email = args.catchup_skip.lower() if args.catchup_skip else None
+
             # Single-pass optimization: get all authors + last commits at once
             author_map = get_active_authors_with_last_commits(days=60, max_count=1000)
-            
-            for i, (email, last_commit_info) in enumerate(author_map.items()):
-                if i > 0:
+
+            processed = 0
+            for email, last_commit_info in author_map.items():
+                if skip_email and email.lower() == skip_email:
+                    print(f"Skipping {email} (committer — already up to date)")
+                    continue
+
+                if processed > 0:
                     print("Waiting 60s before next user to respect rate limits...")
-                    time.sleep(60) 
-                
+                    time.sleep(60)
+
                 try:
                     process_catchup(email, config, last_commit_info=last_commit_info)
+                    processed += 1
                 except Exception as e:
                     print(f"  Error processing {email}: {e}")
             return

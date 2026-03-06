@@ -60,9 +60,10 @@ jobs:
             echo "No new commits to process"
           fi
 
-          # Update catchup summaries for all active developers
+          # Update catchup summaries for all active developers (skip the committer)
           echo "Generating catchup summaries..."
-          checkpoint --catchup-all
+          PUSHER_EMAIL=$(git log -1 --format='%ae' ${{ github.sha }})
+          checkpoint --catchup-all --catchup-skip "$PUSHER_EMAIL"
 
       - name: Commit Catchup Summaries
         run: |
