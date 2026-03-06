@@ -27,7 +27,6 @@ classifiers = [
 
 dependencies = [
     "langgraph>=0.2.0",
-    "dspy-ai>=2.0.0",
     "litellm>=1.0.0",
     "httpx>=0.24.0",
     "gitpython>=3.1.0",

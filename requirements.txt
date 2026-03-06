@@ -1,5 +1,4 @@
 langgraph
-dspy-ai
 litellm
 httpx
 gitpython
