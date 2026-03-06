@@ -7,7 +7,7 @@ name = "checkpoint-agent"
 version = "1.0.0"
 description = "AI-powered developer onboarding and context recovery system for git repositories"
 authors = [
-    {name = "Code Checkpoint Team", email = "checkpoint@example.com"}
+    {name = "Gagan N Bangaragiri", email = "gagan.bangaragiri@gmail.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.10"
@@ -46,10 +46,10 @@ dev = [
 checkpoint = "checkpoint_agent.__main__:main"
 
 [project.urls]
-Homepage = "https://github.com/checkpoint-agent/checkpoint"
-Documentation = "https://github.com/checkpoint-agent/checkpoint#readme"
-Repository = "https://github.com/checkpoint-agent/checkpoint"
-Issues = "https://github.com/checkpoint-agent/checkpoint/issues"
+Homepage = "https://github.com/BurntDosa/Checkpoint"
+Documentation = "https://github.com/BurntDosa/Checkpoint#readme"
+Repository = "https://github.com/BurntDosa/Checkpoint"
+Issues = "https://github.com/BurntDosa/Checkpoint/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
