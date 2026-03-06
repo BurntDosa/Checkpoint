@@ -1,44 +1,33 @@
-from typing import TypedDict, Optional
-from langgraph.graph import StateGraph, END
 from checkpoint_agent.agents import CheckpointGenerator
 from checkpoint_agent.storage import save_checkpoint
 from checkpoint_agent.llm import configure_llm
 
-# Define the state of the graph
-class GraphState(TypedDict):
-    diff_content: str
-    commit_hash: str
-    metadata: dict
-    generated_markdown: Optional[str]
-    filepath: Optional[str]
 
-# Node: Configuration
-def configure_env(state: GraphState):
+def run_pipeline(diff_content: str, commit_hash: str, metadata: dict) -> dict:
     configure_llm()
-    return state
 
-# Node: Analysis (DSPy)
-def analyze_diff(state: GraphState):
     generator = CheckpointGenerator()
-    result = generator(diff_content=state["diff_content"])
-    return {"generated_markdown": result.markdown_content}
+    result = generator(diff_content=diff_content)
 
-# Node: Storage
-def save_output(state: GraphState):
-    author = state["metadata"].get("author", "Unknown")
-    filepath = save_checkpoint(state["generated_markdown"], state["commit_hash"], author=author)
-    return {"filepath": filepath}
+    author = metadata.get("author", "Unknown")
+    filepath = save_checkpoint(result.markdown_content, commit_hash, author=author)
 
-# Build the Graph
-workflow = StateGraph(GraphState)
+    return {
+        "diff_content": diff_content,
+        "commit_hash": commit_hash,
+        "metadata": metadata,
+        "generated_markdown": result.markdown_content,
+        "filepath": filepath,
+    }
 
-workflow.add_node("configure", configure_env)
-workflow.add_node("analyze", analyze_diff)
-workflow.add_node("save", save_output)
 
-workflow.set_entry_point("configure")
-workflow.add_edge("configure", "analyze")
-workflow.add_edge("analyze", "save")
-workflow.add_edge("save", END)
+class _App:
+    def invoke(self, state: dict) -> dict:
+        return run_pipeline(
+            diff_content=state["diff_content"],
+            commit_hash=state["commit_hash"],
+            metadata=state["metadata"],
+        )
 
-app = workflow.compile()
+
+app = _App()
