@@ -80,13 +80,16 @@ jobs:
             echo "No new commits to process"
           fi
 
-          # Update catchup summaries only if checkpoints exist
-          echo "Generating catchup summaries..."
+          # Update catchup summaries and regenerate MASTER_CONTEXT only if checkpoints exist
           SKIP_EMAILS=$(git log --format='%ae' ${{ github.event.before }}..${{ github.sha }} 2>/dev/null | sort -u | tr '\n' ',' | sed 's/,$//')
           if ls checkpoints/Checkpoint-*.md 1>/dev/null 2>&1; then
+            echo "Generating catchup summaries..."
             checkpoint --catchup-all --catchup-skip "$SKIP_EMAILS"
+
+            echo "Regenerating MASTER_CONTEXT.md..."
+            checkpoint --onboard
           else
-            echo "No checkpoints yet — skipping catchup generation"
+            echo "No checkpoints yet — skipping catchup and master context generation"
           fi
 
       - name: Commit Catchup Summaries

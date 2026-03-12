@@ -1,4 +1,5 @@
 import git
+import re
 from typing import Optional
 from functools import lru_cache
 
@@ -6,9 +7,27 @@ from functools import lru_cache
 def get_repo(path: str = ".") -> git.Repo:
     return git.Repo(path, search_parent_directories=True)
 
+# Files that belong to the checkpoint system itself — never send to the LLM
+_CHECKPOINT_SYSTEM_PATTERNS = re.compile(
+    r'^('
+    r'\.checkpoint\.yaml'
+    r'|\.github/workflows/checkpoint\.yml'
+    r'|checkpoints/'
+    r'|MASTER_CONTEXT\.md'
+    r')'
+)
+
+
+def _is_checkpoint_system_file(path: str) -> bool:
+    """Return True if the path belongs to the checkpoint system, not the user's project."""
+    return bool(_CHECKPOINT_SYSTEM_PATTERNS.match(path)) if path else False
+
+
 def get_diff(commit_hash: str, repo_path: str = ".") -> str:
     """
     Retrieves the diff for a specific commit.
+    Excludes checkpoint system files (.checkpoint.yaml, workflow, checkpoints/, MASTER_CONTEXT.md)
+    so the LLM only sees the project's actual code changes.
     """
     repo = get_repo(repo_path)
     commit = repo.commit(commit_hash)
@@ -19,9 +38,12 @@ def get_diff(commit_hash: str, repo_path: str = ".") -> str:
     else:
         # First commit
         diff = commit.diff(git.NULL_TREE, create_patch=True)
-    
+
     diff_text = ""
     for d in diff:
+        # Skip checkpoint system files
+        if _is_checkpoint_system_file(d.a_path) or _is_checkpoint_system_file(d.b_path):
+            continue
         if d.diff:
             diff_text += d.diff.decode('utf-8', errors='replace') + "\n"
 
@@ -114,10 +136,15 @@ def get_current_branch(repo_path: str = ".") -> str:
 def get_diff_between_refs(base_ref: str, head_ref: str, repo_path: str = ".") -> str:
     """
     Returns the combined git diff between two refs (branches, SHAs, tags).
-    Useful for generating a full PR diff.
+    Excludes checkpoint system files. Useful for generating a full PR diff.
     """
     repo = get_repo(repo_path)
-    return repo.git.diff(base_ref, head_ref)
+    # Use pathspec to exclude checkpoint system files
+    return repo.git.diff(
+        base_ref, head_ref,
+        "--", ".", ":!.checkpoint.yaml", ":!.github/workflows/checkpoint.yml",
+        ":!checkpoints/", ":!MASTER_CONTEXT.md",
+    )
 
 def get_commits_between_refs(base_ref: str, head_ref: str, repo_path: str = ".") -> list[dict]:
     """
