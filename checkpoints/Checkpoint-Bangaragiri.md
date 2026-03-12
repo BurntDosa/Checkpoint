@@ -1,3 +1,86 @@
+## Commit `f0cfaae` — 2026-03-12
+
+# **Checkpoint System: Exclusion of Internal Files from Git Diffs**
+*Last Updated: [Insert Date]*
+
+---
+
+## **Context**
+The checkpoint system generates git diffs for LLM processing (e.g., summarizing PRs, creating onboarding docs). Previously, **all files** in the repo were included in these diffs—including checkpoint system artifacts like:
+- `.checkpoint.yaml` (config)
+- `.github/workflows/checkpoint.yml` (CI)
+- `checkpoints/` (generated summaries)
+- `MASTER_CONTEXT.md` (onboarding doc)
+
+This caused **noise** in LLM inputs (e.g., the LLM would see its own outputs as "new changes") and **redundant processing** of internal files. The change filters these files out of diffs to ensure the LLM only processes **user project code**.
+
+---
+
+## **Changes**
+
+### **1. `git_utils.py` (Core Diff Logic)**
+#### **New Imports & Constants**
+- Added `re` for regex pattern matching.
+- Introduced `_CHECKPOINT_SYSTEM_PATTERNS`: A compiled regex matching paths for checkpoint system files.
+
+#### **New Helper Function**
+- `_is_checkpoint_system_file(path: str) -> bool`
+  - Uses `_CHECKPOINT_SYSTEM_PATTERNS` to identify internal files.
+  - Returns `True` if the path matches any checkpoint system artifact.
+
+#### **Modified Functions**
+- **`get_diff(commit_hash: str, repo_path: str) -> str`**
+  - Now skips diffs where **either** `d.a_path` (old file) **or** `d.b_path` (new file) is a checkpoint system file.
+  - Example exclusion: A diff for `checkpoints/Checkpoint-123.md` is ignored.
+
+- **`get_diff_between_refs(base_ref: str, head_ref: str, repo_path: str) -> str`**
+  - Uses Git’s **pathspec exclusion** (`--`, `:!pattern`) to filter out checkpoint files **at the `git diff` command level** (more efficient than post-processing).
+  - Explicitly excludes:
+    ```python
+    ":!.checkpoint.yaml", ":!.github/workflows/checkpoint.yml",
+    ":!checkpoints/", ":!MASTER_CONTEXT.md"
+    ```
+
+### **2. `.github/workflows/checkpoint.yml` (CI Workflow)**
+#### **Enhanced Catchup Logic**
+- Added a new step to **regenerate `MASTER_CONTEXT.md`** after catchup summaries:
+  ```yaml
+  echo "Regenerating MASTER_CONTEXT.md..."
+  checkpoint --onboard
+  ```
+- Updated logging to clarify when **both catchup and master context generation** are skipped (previously only mentioned catchup).
+
+---
+
+## **Impact**
+
+### **Architectural**
+1. **LLM Input Purity**
+   - Diffs sent to the LLM now **exclude metadata** about the checkpoint system itself, reducing confusion (e.g., the LLM no longer sees `MASTER_CONTEXT.md` updates as "new code changes").
+   - Example: A PR adding `src/new_feature.py` will only show that file’s diff, not unrelated checkpoint artifacts.
+
+2. **Performance**
+   - **Faster diff generation**: Pathspec exclusion in `get_diff_between_refs` avoids processing irrelevant files entirely.
+   - **Smaller payloads**: Fewer lines in diffs reduce LLM token usage.
+
+3. **CI Workflow**
+   - `MASTER_CONTEXT.md` is now **regenerated on every push with checkpoints**, ensuring it stays synchronized with the latest project state.
+   - No functional change to existing behavior—just **added consistency**.
+
+### **Downstream Effects**
+- **Backward Compatible**: No breaking changes to function signatures or return types.
+- **Dependencies**: Relies on Git’s pathspec syntax (supported in all modern Git versions).
+- **Testing**: Requires validation that:
+  - Checkpoint files are **never** included in diffs (unit test for `_is_checkpoint_system_file`).
+  - `MASTER_CONTEXT.md` updates correctly in CI (integration test).
+
+---
+
+## **Priority Rating**
+**HIGH** – This change directly impacts the quality of LLM inputs and reduces noise in core workflows, but it’s not a critical bug fix.
+
+---
+
 ## Commit `2a1d132` — 2026-03-12
 
 # **Checkpoint Document: Release Pipeline Version Validation**
