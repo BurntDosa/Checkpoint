@@ -22,8 +22,9 @@ def get_diff(commit_hash: str, repo_path: str = ".") -> str:
     
     diff_text = ""
     for d in diff:
-        diff_text += str(d) + "\n"
-        
+        if d.diff:
+            diff_text += d.diff.decode('utf-8', errors='replace') + "\n"
+
     return diff_text
 
 def get_current_commit_hash(repo_path: str = ".") -> str:
@@ -104,14 +105,6 @@ def get_active_authors_with_last_commits(days: int = 60, repo_path: str = ".", m
         }
 
     return author_map
-
-def get_active_authors(days: int = 60, repo_path: str = ".") -> list[str]:
-    """
-    Returns a list of unique emails of authors who have committed in the last N days.
-    DEPRECATED: Use get_active_authors_with_last_commits() for better performance.
-    """
-    author_map = get_active_authors_with_last_commits(days, repo_path)
-    return list(author_map.keys())
 
 def get_current_branch(repo_path: str = ".") -> str:
     """Returns the name of the currently active branch."""

@@ -6,6 +6,34 @@ import re
 
 CHECKPOINT_DIR = "checkpoints"
 
+INITIAL_MASTER_CONTEXT_TEMPLATE = """\
+# Master Context
+
+> Auto-generated onboarding document for **{repo_name}**. Created {date}.
+
+This document is a living architectural overview of the codebase. It is regenerated
+automatically when pull requests are merged, so its content always reflects the
+current state of the project.
+
+**This is a placeholder.** The sections below will be populated with real analysis
+after meaningful code changes are merged.
+
+## Architecture Overview
+_Will be populated automatically._
+
+## Key Decision Log
+_Will be populated automatically._
+
+## Gotchas & Tech Debt
+_Will be populated automatically._
+
+## Dependency Map
+_Will be populated automatically._
+
+## Getting Started
+_Will be populated automatically._
+"""
+
 def ensure_checkpoint_dir():
     """Ensures the checkpoints directory exists."""
     Path(CHECKPOINT_DIR).mkdir(parents=True, exist_ok=True)

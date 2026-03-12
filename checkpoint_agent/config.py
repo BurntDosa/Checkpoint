@@ -31,7 +31,6 @@ class RepositoryConfig(BaseModel):
 
 class FeaturesConfig(BaseModel):
     """Feature toggles."""
-    git_hook: bool = Field(default=False, description="Install git hook (not needed if using GitHub Actions)")
     diagrams: bool = Field(default=True, description="Generate Mermaid diagrams")
     auto_catchup: bool = Field(default=False, description="Auto-generate catchup (handled by GitHub Actions)")
 
@@ -92,7 +91,7 @@ def write_config(config: CheckpointConfig, config_path: str = ".checkpoint.yaml"
     """
     try:
         path = Path(config_path)
-        data = config. model_dump(mode='python')
+        data = config.model_dump(mode='python')
         
         with open(path, 'w') as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
@@ -158,8 +157,8 @@ def get_api_key_for_provider(provider: str) -> Optional[str]:
     # Get env var name
     env_var = provider_env_map.get(provider_lower)
     if env_var is None:
-        # For Ollama or unknown providers, might not need API key
-        return os.getenv("API_KEY")  # Generic fallback
+        # Local providers (ollama) don't need an API key
+        return "not-needed"
     
     return os.getenv(env_var)
 

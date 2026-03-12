@@ -2,21 +2,21 @@ import os
 import unittest
 import shutil
 import tempfile
-from checkpoint_agent.mermaid_utils import generate_file_dependency_mermaid, generate_class_hierarchy_mermaid
+from checkpoint_agent.mermaid_utils import generate_all_mermaid_diagrams
 
 class TestMermaidUtils(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp()
-        
+
         # Create a dummy file structure
         # main.py imports utils
         # utils.py defines methods
         # base.py defines Base class
         # child.py defines Child class inheriting Base
-        
+
         with open(os.path.join(self.test_dir, "main.py"), "w") as f:
             f.write("import utils\nfrom base import Base\n")
-            
+
         with open(os.path.join(self.test_dir, "utils.py"), "w") as f:
             f.write("def helper(): pass\n")
 
@@ -30,18 +30,18 @@ class TestMermaidUtils(unittest.TestCase):
         shutil.rmtree(self.test_dir)
 
     def test_dependency_graph(self):
-        mermaid = generate_file_dependency_mermaid(self.test_dir)
-        print("Dependency Mermaid:\n", mermaid)
-        self.assertIn("main --> utils", mermaid)
-        self.assertIn("main --> base", mermaid) # from base import Base imports 'base' module implicitly
-        self.assertIn("child --> base", mermaid)
-        self.assertIn("graph TD", mermaid)
+        dep_mermaid, _ = generate_all_mermaid_diagrams(self.test_dir)
+        print("Dependency Mermaid:\n", dep_mermaid)
+        self.assertIn("main --> utils", dep_mermaid)
+        self.assertIn("main --> base", dep_mermaid)
+        self.assertIn("child --> base", dep_mermaid)
+        self.assertIn("graph TD", dep_mermaid)
 
     def test_class_hierarchy(self):
-        mermaid = generate_class_hierarchy_mermaid(self.test_dir)
-        print("Class Mermaid:\n", mermaid)
-        self.assertIn("Base <|-- Child", mermaid)
-        self.assertIn("classDiagram", mermaid)
+        _, class_mermaid = generate_all_mermaid_diagrams(self.test_dir)
+        print("Class Mermaid:\n", class_mermaid)
+        self.assertIn("Base <|-- Child", class_mermaid)
+        self.assertIn("classDiagram", class_mermaid)
 
 if __name__ == "__main__":
     unittest.main()

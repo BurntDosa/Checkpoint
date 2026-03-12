@@ -9,10 +9,9 @@ from checkpoint_agent.graph import app
 
 class TestCheckpointWorkflow(unittest.TestCase):
 
-    @patch("checkpoint_agent.graph.configure_llm")
     @patch("checkpoint_agent.graph.CheckpointGenerator")
     @patch("checkpoint_agent.graph.save_checkpoint")
-    def test_full_workflow(self, mock_save, mock_generator_cls, mock_configure):
+    def test_full_workflow(self, mock_save, mock_generator_cls):
         # Setup Mocks
 
         # Mock Generator
@@ -36,19 +35,16 @@ class TestCheckpointWorkflow(unittest.TestCase):
         final_state = app.invoke(initial_state)
 
         # Assertions
-        
-        # 1. Config should check/set env
-        mock_configure.assert_called_once()
-        
-        # 2. Generator should be called with diff
+
+        # 1. Generator should be called with diff
         mock_generator_instance.assert_called_once_with(diff_content=initial_state["diff_content"])
-        
-        # 3. Output should be preserved in state
+
+        # 2. Output should be preserved in state
         self.assertEqual(final_state["generated_markdown"], "# Generated Checkpoint")
-        
-        # 4. Save should be called
+
+        # 3. Save should be called
         mock_save.assert_called_once_with("# Generated Checkpoint", "abcdef123456", author="Test User")
-        
+
         print("\nTest passed! Workflow successfully simulated.")
 
 if __name__ == "__main__":

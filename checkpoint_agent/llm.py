@@ -41,8 +41,9 @@ def configure_llm(model: str = None, api_key: str = None, temperature: float = 0
         if provider != "openai":  # OpenAI models work without prefix
             model = f"{provider}/{model}"
 
-    # Disable SSL verification for corporate proxies (Zscaler, etc.)
-    litellm.client = httpx.Client(verify=False)
+    # Optionally disable SSL verification for corporate proxies (Zscaler, etc.)
+    if os.getenv("CHECKPOINT_SSL_VERIFY", "true").lower() == "false":
+        litellm.client = httpx.Client(verify=False)
     litellm.drop_params = True
     litellm.set_verbose = False
 

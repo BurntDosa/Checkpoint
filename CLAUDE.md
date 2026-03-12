@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-AI-powered checkpoint/context generator for git repositories. Uses DSPy + LangGraph + LiteLLM to analyze commits, generate onboarding docs, and create catchup summaries.
+AI-powered checkpoint/context generator for git repositories. Uses LiteLLM to analyze commits, generate onboarding docs, and create catchup summaries.
 
 ## Commands
 
@@ -20,8 +20,7 @@ checkpoint --commit <hash>         # Analyze a specific commit
 checkpoint --commit <hash> --dry-run  # Print instead of saving
 
 # Setup & config
-checkpoint --init                  # Interactive setup wizard
-checkpoint --install-ci            # Install GitHub Actions workflow
+checkpoint --init                  # Install CI workflow + config + boilerplate MASTER_CONTEXT.md
 checkpoint --config                # Show current config
 checkpoint --install-hook          # Install git post-commit hook
 checkpoint --uninstall             # Remove git hook
@@ -33,24 +32,23 @@ python3 -m pytest tests/
 ## Architecture
 
 `checkpoint_agent/__main__.py` (CLI) routes to three flows:
-- **Onboard**: builds `MasterContextGenerator` DSPy agent, feeds file tree + recent checkpoints + Mermaid diagrams, outputs `MASTER_CONTEXT.md`
-- **Catchup**: `CatchupGenerator` DSPy agent synthesizes checkpoints since user's last commit
-- **Commit**: LangGraph state machine (`checkpoint_agent/graph.py`): configure -> analyze -> save -> index(ChromaDB)
+- **Onboard**: `MasterContextGenerator` LiteLLM agent, feeds file tree + recent checkpoints + Mermaid diagrams, outputs `MASTER_CONTEXT.md`
+- **Catchup**: `CatchupGenerator` LiteLLM agent synthesizes checkpoints since user's last commit
+- **Commit**: `run_pipeline()` in `checkpoint_agent/graph.py`: analyze diff -> save checkpoint
 
 ## Key Modules
 
 | File | Role |
 |------|------|
-| `checkpoint_agent/agents.py` | DSPy `Signature` + `ChainOfThought` modules for all LLM tasks |
-| `checkpoint_agent/graph.py` | LangGraph `StateGraph` for commit analysis pipeline |
+| `checkpoint_agent/agents.py` | LiteLLM-based generator classes for all LLM tasks |
+| `checkpoint_agent/graph.py` | `run_pipeline()` for commit analysis (analyze + save) |
 | `checkpoint_agent/llm.py` | LiteLLM-based config; `detect_provider_from_model()` auto-routes providers |
 | `checkpoint_agent/config.py` | Pydantic models (`CheckpointConfig`); loads from `.checkpoint.yaml` |
-| `checkpoint_agent/storage.py` | Save/list checkpoints and catchups (timestamped markdown files under `checkpoints/`) |
+| `checkpoint_agent/storage.py` | Save/list checkpoints and catchups (per-author markdown files under `checkpoints/`) |
 | `checkpoint_agent/git_utils.py` | GitPython wrappers: diffs, commit metadata, author detection via `user.email` |
-| `checkpoint_agent/vector_db.py` | ChromaDB persistent client at `.chroma_db` for semantic search |
 | `checkpoint_agent/mermaid_utils.py` | AST-based Mermaid diagram generation (dependency graph, class hierarchy) |
 | `checkpoint_agent/llm_diagrams.py` | LLM-based diagram generation for non-Python languages |
-| `checkpoint_agent/setup_wizard.py` | Interactive setup wizard (`questionary`-based) |
+| `checkpoint_agent/setup_wizard.py` | Interactive setup wizard |
 | `checkpoint_agent/git_hook_installer.py` | Post-commit hook install/uninstall |
 | `checkpoint_agent/templates/checkpoint.yml` | Bundled GitHub Actions workflow template |
 
@@ -63,7 +61,8 @@ python3 -m pytest tests/
 ## Conventions
 
 - Small functions, broad try/except with user-facing prints for error handling
-- Lazy imports for heavy deps (DSPy, ChromaDB, GitPython) — setup commands stay fast
-- Timestamped filenames for checkpoints and catchups
+- Lazy imports for heavy deps (GitPython, LiteLLM) — setup commands stay fast
+- Per-author stable filenames for checkpoints (`Checkpoint-AuthorName.md`)
 - LLM output is stripped of code fences via `strip_code_fences()` in `checkpoint_agent/agents.py`
 - LiteLLM handles provider routing; model names auto-prefixed (e.g., `mistral/mistral-medium-2508`)
+- SSL verification is enabled by default; set `CHECKPOINT_SSL_VERIFY=false` for corporate proxies

@@ -139,18 +139,3 @@ def generate_all_mermaid_diagrams(root_path: str, depth_limit: int = None) -> Tu
     
     return dep_mermaid, class_mermaid
 
-def generate_file_dependency_mermaid(root_path: str) -> str:
-    """
-    DEPRECATED: Use generate_all_mermaid_diagrams() instead for better performance.
-    Kept for backward compatibility.
-    """
-    dep_mermaid, _ = generate_all_mermaid_diagrams(root_path)
-    return dep_mermaid
-
-def generate_class_hierarchy_mermaid(root_path: str) -> str:
-    """
-    DEPRECATED: Use generate_all_mermaid_diagrams() instead for better performance.
-    Kept for backward compatibility.
-    """
-    _, class_mermaid = generate_all_mermaid_diagrams(root_path)
-    return class_mermaid

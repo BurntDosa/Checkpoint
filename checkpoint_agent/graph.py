@@ -1,11 +1,8 @@
 from checkpoint_agent.agents import CheckpointGenerator
 from checkpoint_agent.storage import save_checkpoint
-from checkpoint_agent.llm import configure_llm
 
 
 def run_pipeline(diff_content: str, commit_hash: str, metadata: dict) -> dict:
-    configure_llm()
-
     generator = CheckpointGenerator()
     result = generator(diff_content=diff_content)
 

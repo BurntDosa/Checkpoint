@@ -27,21 +27,33 @@ def truncate_checkpoint(content: str, max_chars: int = 2000) -> str:
     return content[:max_chars] + "\n\n[... truncated for brevity ...]\n"
 
 def get_file_tree(path="."):
-    """Simple wrapper to get file tree using `tree` or `find`."""
+    """Get file tree using `tree`, `find`, or pure-Python fallback."""
     try:
-        # Try `tree` command first
+        # Try `tree` command first (Linux/macOS)
         result = subprocess.run(["tree", "-L", "2", "-I", "__pycache__|venv|.git"], capture_output=True, text=True)
         if result.returncode == 0:
             return result.stdout
     except FileNotFoundError:
         pass
-    
-    # Fallback to find
+
+    # Fallback to find (Linux/macOS)
     try:
         result = subprocess.run(["find", ".", "-maxdepth", "2", "-not", "-path", "*/.*"], capture_output=True, text=True)
-        return result.stdout
-    except Exception:
-        return "File structure unavailable."
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout
+    except FileNotFoundError:
+        pass
+
+    # Pure-Python fallback (Windows and other platforms)
+    entries = []
+    root = Path(path)
+    for p in sorted(root.rglob("*")):
+        if any(part.startswith('.') for part in p.parts):
+            continue
+        rel = p.relative_to(root)
+        if len(rel.parts) <= 2:
+            entries.append(str(rel))
+    return "\n".join(entries) if entries else "File structure unavailable."
 
 def install_ci_workflow(target_dir="."):
     """Install GitHub Actions workflow and create default .checkpoint.yaml."""
@@ -75,7 +87,7 @@ def install_ci_workflow(target_dir="."):
   provider: mistral
   model: mistral-medium-2508
   temperature: 0.7
-  max_tokens: 2000
+  max_tokens: 8000
 
 repository:
   output_dir: ./checkpoints
@@ -97,17 +109,29 @@ repository:
     - "**/*.toml"
 
 features:
-  git_hook: false
   diagrams: true
-  vector_db: false
   auto_catchup: false
 """
         config_file.write_text(default_config)
         print(f"✅ Default config created at {config_file}")
 
+    # Create boilerplate MASTER_CONTEXT.md so the first push doesn't trigger LLM
+    master_context_file = Path(target_dir) / "MASTER_CONTEXT.md"
+    if not master_context_file.exists():
+        from checkpoint_agent.storage import INITIAL_MASTER_CONTEXT_TEMPLATE
+        import datetime
+        repo_name = Path(target_dir).resolve().name
+        master_context_file.write_text(
+            INITIAL_MASTER_CONTEXT_TEMPLATE.format(
+                repo_name=repo_name,
+                date=datetime.date.today().isoformat(),
+            )
+        )
+        print(f"✅ Boilerplate MASTER_CONTEXT.md created at {master_context_file}")
+
     print("\n   Next steps:")
     print("   1. Add your LLM API key as a GitHub Secret (e.g. MISTRAL_API_KEY)")
-    print("   2. git add .github/workflows/checkpoint.yml .checkpoint.yaml && git commit -m 'ci: add checkpoint'")
+    print("   2. git add .github/workflows/checkpoint.yml .checkpoint.yaml MASTER_CONTEXT.md && git commit -m 'ci: add checkpoint'")
     print("   3. git push — checkpoints will be auto-generated on every push & PR")
     return True
 
@@ -349,8 +373,8 @@ Examples:
                     continue
 
                 if processed > 0:
-                    print("Waiting 60s before next user to respect rate limits...")
-                    time.sleep(60)
+                    print("Waiting 5s before next user to respect rate limits...")
+                    time.sleep(5)
 
                 try:
                     process_catchup(email, config, last_commit_info=last_commit_info)
@@ -407,6 +431,8 @@ Examples:
                     diff_content = get_diff(commit_hash)
                     if not diff_content.strip():
                         continue
+                    if len(diff_content) > 12000:
+                        diff_content = diff_content[:12000] + "\n\n[... diff truncated ...]\n"
                     metadata = get_commit_metadata(commit_hash)
                     initial_state = {
                         "diff_content": diff_content,
@@ -471,6 +497,9 @@ Examples:
             if not diff_content.strip():
                 print("No changes found in diff.")
                 return
+
+            if len(diff_content) > 12000:
+                diff_content = diff_content[:12000] + "\n\n[... diff truncated ...]\n"
 
             metadata = get_commit_metadata(commit_hash)
             

@@ -14,6 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    concurrency:
+      group: checkpoint-push-${{ github.ref }}
+      cancel-in-progress: true
 
     steps:
       - name: Checkout code
@@ -28,6 +31,17 @@ jobs:
 
       - name: Install checkpoint
         run: pip install checkpoint-agent
+
+      - name: Validate API key
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$MISTRAL_API_KEY" ] && [ -z "$OPENAI_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::No LLM API key found. Add MISTRAL_API_KEY (or equivalent) as a GitHub Secret."
+            exit 1
+          fi
 
       - name: Run Checkpoint Agent & Update Contexts
         env:
@@ -53,6 +67,12 @@ jobs:
           if [ -n "$COMMITS" ]; then
             echo "Generating checkpoints for pushed commits..."
             for commit in $COMMITS; do
+              # Skip commits that only touch checkpoint config files
+              CHANGED=$(git diff-tree --no-commit-id --name-only -r "$commit" | grep -v -E '^\.(checkpoint\.yaml|github/)')
+              if [ -z "$CHANGED" ]; then
+                echo "  Skipping config-only commit: $commit"
+                continue
+              fi
               echo "  Processing commit: $commit"
               checkpoint --commit "$commit" || echo "Failed to generate checkpoint for $commit"
             done
@@ -60,15 +80,13 @@ jobs:
             echo "No new commits to process"
           fi
 
-          # Update catchup summaries for all active developers (skip all authors in this push)
+          # Update catchup summaries only if checkpoints exist
           echo "Generating catchup summaries..."
           SKIP_EMAILS=$(git log --format='%ae' ${{ github.event.before }}..${{ github.sha }} 2>/dev/null | sort -u | tr '\n' ',' | sed 's/,$//')
-          checkpoint --catchup-all --catchup-skip "$SKIP_EMAILS"
-
-          # Generate MASTER_CONTEXT.md if it doesn't exist yet
-          if [ ! -f "MASTER_CONTEXT.md" ]; then
-            echo "MASTER_CONTEXT.md not found — generating initial master context..."
-            checkpoint --onboard
+          if ls checkpoints/Checkpoint-*.md 1>/dev/null 2>&1; then
+            checkpoint --catchup-all --catchup-skip "$SKIP_EMAILS"
+          else
+            echo "No checkpoints yet — skipping catchup generation"
           fi
 
       - name: Commit Catchup Summaries
@@ -86,6 +104,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    concurrency:
+      group: checkpoint-pr-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
 
     steps:
       - name: Checkout code
@@ -102,16 +123,27 @@ jobs:
       - name: Install checkpoint
         run: pip install checkpoint-agent
 
-      - name: Generate Per-Commit Checkpoints & PR Summary
+      - name: Validate API key
         env:
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
+          if [ -z "$MISTRAL_API_KEY" ] && [ -z "$OPENAI_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::No LLM API key found. Add MISTRAL_API_KEY (or equivalent) as a GitHub Secret."
+            exit 1
+          fi
+
+      - name: Generate Per-Commit Checkpoints & PR Summary
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
           BASE_SHA="${{ github.event.pull_request.base.sha }}"
           HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           PR_NUMBER="${{ github.event.pull_request.number }}"
-          PR_TITLE="${{ github.event.pull_request.title }}"
           HEAD_BRANCH="${{ github.event.pull_request.head.ref }}"
 
           echo "Processing PR #${PR_NUMBER}: ${PR_TITLE}"
@@ -149,6 +181,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    concurrency:
+      group: checkpoint-master-${{ github.event.pull_request.base.ref }}
+      cancel-in-progress: true
 
     steps:
       - name: Checkout base branch post-merge
@@ -164,6 +199,17 @@ jobs:
 
       - name: Install checkpoint
         run: pip install checkpoint-agent
+
+      - name: Validate API key
+        env:
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          if [ -z "$MISTRAL_API_KEY" ] && [ -z "$OPENAI_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "::error::No LLM API key found. Add MISTRAL_API_KEY (or equivalent) as a GitHub Secret."
+            exit 1
+          fi
 
       - name: Regenerate Master Context
         env:
