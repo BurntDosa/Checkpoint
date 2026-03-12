@@ -26,29 +26,20 @@ pip install checkpoint-agent
 # Navigate to your git repository
 cd /path/to/your/repo
 
-# Run the interactive setup wizard
+# Install the GitHub Actions workflow + create default config
 checkpoint --init
-
-# Install the GitHub Actions workflow
-checkpoint --install-ci
-
-# Generate the master context (first time)
-checkpoint --onboard
 ```
 
-The setup wizard will ask for your LLM provider, model, and API key, then write `.checkpoint.yaml` and `.env`.
+Then add your LLM API key as a GitHub Secret (e.g. `MISTRAL_API_KEY`) and push — checkpoints will be generated automatically.
 
 ## Commands
 
 ```bash
 # Setup
-checkpoint --init                        # Interactive setup wizard
-checkpoint --install-ci                  # Install GitHub Actions workflow
+checkpoint --init                        # Install GitHub Actions workflow + create config
 checkpoint --config                      # Show current configuration
-checkpoint --install-hook                # Install local git post-commit hook (optional)
-checkpoint --uninstall                   # Remove git hook
 
-# Generation
+# Generation (also runs automatically via GitHub Actions)
 checkpoint --onboard                     # Generate MASTER_CONTEXT.md
 checkpoint --catchup                     # Generate your personal catchup
 checkpoint --catchup user@email.com      # Generate catchup for a specific user
@@ -64,7 +55,7 @@ checkpoint --stats                       # Show checkpoint statistics
 
 ## GitHub Actions (recommended)
 
-Run `checkpoint --install-ci` to install the workflow, then add your LLM API key as a GitHub secret (e.g. `MISTRAL_API_KEY`).
+Run `checkpoint --init` to install the workflow and create the default config, then add your LLM API key as a GitHub secret (e.g. `MISTRAL_API_KEY`).
 
 The workflow runs three jobs automatically:
 
@@ -123,7 +114,7 @@ checkpoint_agent/
 ├── git_utils.py         # GitPython wrappers
 ├── mermaid_utils.py     # AST-based diagram generation (Python)
 ├── llm_diagrams.py      # LLM-based diagram generation (other languages)
-├── setup_wizard.py      # Interactive setup wizard
+├── setup_wizard.py      # Config display utilities
 ├── git_hook_installer.py
 └── templates/
     └── checkpoint.yml   # Bundled GitHub Actions workflow
