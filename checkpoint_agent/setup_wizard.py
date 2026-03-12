@@ -1,11 +1,10 @@
 """Interactive setup wizard for Code Checkpoint."""
-import getpass
 from pathlib import Path
 from checkpoint_agent.config import (
     CheckpointConfig, LLMConfig, RepositoryConfig, FeaturesConfig,
-    write_config, set_api_key_env, validate_config, get_api_key_for_provider
+    write_config, validate_config
 )
-from checkpoint_agent.git_hook_installer import install_hook, check_hook_status
+from checkpoint_agent.git_hook_installer import check_hook_status
 from collections import Counter
 
 
@@ -141,27 +140,6 @@ def run_setup_wizard() -> bool:
 
     model = input(f"Model name [{default_model}]: ").strip() or default_model
 
-    # Get API key (skip for Ollama)
-    api_key = None
-    if provider != "Ollama (Local)":
-        # Check if already in environment
-        existing_key = get_api_key_for_provider(provider.lower())
-
-        if existing_key:
-            raw = input("Found existing API key in environment. Use it? [Y/n]: ").strip().lower()
-            use_existing = raw in ("", "y", "yes")
-
-            if use_existing:
-                api_key = existing_key
-            else:
-                api_key = getpass.getpass(f"{provider} API Key: ")
-        else:
-            api_key = getpass.getpass(f"{provider} API Key: ")
-
-        if not api_key:
-            print("\nAPI key required. Setup cancelled.")
-            return False
-
     # Temperature setting
     temp_raw = input("Temperature (0.0-2.0) [0.7]: ").strip()
     try:
@@ -217,9 +195,8 @@ def run_setup_wizard() -> bool:
     print(f"   Languages: {', '.join(detected_langs.keys())}")
 
     print(f"\nFeatures:")
-    print(f"   Git Hook: {'yes' if install_git_hook else 'no'}")
     print(f"   Diagrams: {'yes' if enable_diagrams else 'no'}")
-    print(f"   Auto Catchup: {'yes' if auto_catchup else 'no'}")
+    print(f"   Checkpoints via: GitHub Actions (add your API key as a GitHub Secret)")
     print()
 
     raw = input("Proceed with this configuration? [Y/n]: ").strip().lower()
@@ -254,14 +231,6 @@ def run_setup_wizard() -> bool:
     if not write_config(config, ".checkpoint.yaml"):
         print("Failed to write configuration file.")
         return False
-
-    # Save API key to .env if provided
-    if api_key:
-        try:
-            set_api_key_env(provider.lower().replace(" (local)", ""), api_key)
-            print("API key saved to .env file")
-        except Exception as e:
-            print(f"Warning: Could not save API key to .env: {e}")
 
     # Validate configuration
     is_valid, errors = validate_config(config)
@@ -299,11 +268,10 @@ def run_setup_wizard() -> bool:
     print("Setup Complete!")
     print("="*60)
     print("\nNext Steps:")
-    print("   1. Generate master context:  checkpoint --onboard")
-    print("   2. Generate your catchup:    checkpoint --catchup")
-    print("   3. Make a commit:            git commit")
-    print("      (Checkpoints will be auto-generated if hook is enabled)")
-    print("\nDocumentation: https://github.com/checkpoint-agent/checkpoint#readme")
+    print("   1. Install GitHub Actions workflow:  checkpoint --install-ci")
+    print("   2. Add your API key as a GitHub Secret (e.g. MISTRAL_API_KEY)")
+    print("   3. Push to GitHub — checkpoints will be auto-generated on every push & PR")
+    print("\nDocumentation: https://github.com/BurntDosa/Checkpoint#readme")
     print()
 
     return True
