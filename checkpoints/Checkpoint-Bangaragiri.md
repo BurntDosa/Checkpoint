@@ -1,3 +1,51 @@
+## Commit `2a1d132` — 2026-03-12
+
+# **Checkpoint Document: Release Pipeline Version Validation**
+
+## **Context**
+This change addresses a **critical gap in our CI/CD release pipeline** where the built Python package version was not being validated against the Git tag before publishing to PyPI. Previously, the workflow in `.github/workflows/release.yml` would:
+1. Check out the repository (using the default branch, not the tag).
+2. Build the package.
+3. Publish to PyPI **without verifying** that the built version matched the tagged release.
+
+This created a risk of **version mismatch**—e.g., if `pyproject.toml` was not updated correctly, the wrong version could be published. The fix ensures that the built artifact’s version matches the Git tag (e.g., `v1.2.3` → `1.2.3`) before publishing.
+
+---
+
+## **Changes**
+### **File: `.github/workflows/release.yml`**
+1. **Checkout Step (`actions/checkout@v4`)**
+   - Added `with: ref: ${{ github.event.release.tag_name }}` to ensure the workflow checks out the **tagged commit** (not the default branch).
+
+2. **New Step: `Verify built version`**
+   - Added a validation step after `Build package` that:
+     - Lists files in `dist/` for debugging.
+     - Extracts the version from the Git tag (stripping the leading `v`).
+     - Checks if any file in `dist/` contains the expected version string.
+     - **Fails the workflow** if no matching file is found, preventing a bad publish.
+
+3. **No Changes to `Publish to PyPI`**
+   - The existing PyPI publish step remains unchanged but is now **guarded** by the version check.
+
+---
+## **Impact**
+### **Architectural**
+- **Stricter Release Hygiene**: The pipeline now enforces a 1:1 relationship between Git tags and published versions.
+- **Fail-Fast**: If `pyproject.toml` is misconfigured (e.g., `version = "1.2.3"` but tagged as `v1.2.4`), the workflow fails **before** publishing.
+
+### **Downstream Effects**
+- **No Breaking Changes**: Existing releases continue to work; this only adds validation.
+- **Developer Workflow**:
+  - Teams must ensure `pyproject.toml` matches the tag before creating a release.
+  - If the workflow fails, the error message explicitly shows the mismatch (e.g., `Expected version 1.2.3 in dist/`).
+
+---
+## **Priority Rating**
+**CRITICAL**
+This prevents incorrect versions from being published to PyPI, which could break downstream dependencies or violate semantic versioning guarantees. The fix is low-risk (purely additive validation) with high reward (preventing release corruption).
+
+---
+
 ## Commit `7655cd6` — 2026-03-12
 
 # **Checkpoint Document: LiteLLM Migration & CI Workflow Overhaul**
