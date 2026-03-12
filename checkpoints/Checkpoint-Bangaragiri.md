@@ -1,3 +1,111 @@
+## Commit `ca0e205` — 2026-03-12
+
+# **Checkpoint Document: GitHub Actions Workflow & Configuration Simplification**
+**Author:** [Your Name]
+**Date:** [Current Date]
+
+---
+
+## **Context (Background on Why This Change Exists)**
+The `checkpoint-agent` tool previously relied on an **interactive setup wizard** (`setup_wizard.py`) to guide users through configuration. This approach had several pain points:
+1. **Friction in onboarding** – Users had to run a multi-step wizard before generating checkpoints.
+2. **Redundancy with GitHub Actions** – The wizard configured local git hooks, but the primary workflow already used GitHub Actions for checkpoint generation.
+3. **Maintenance overhead** – The wizard included complex logic (language detection, validation, etc.) that was rarely modified but added technical debt.
+
+This change **removes the setup wizard entirely** and replaces it with:
+- A **default `.checkpoint.yaml`** auto-generated during `checkpoint --install-ci`.
+- A **simplified configuration** that assumes GitHub Actions as the primary execution environment.
+- **Fewer required user decisions** (sensible defaults are provided).
+
+The goal is to **reduce onboarding time** while maintaining flexibility for advanced users to manually edit `.checkpoint.yaml`.
+
+---
+
+## **Changes (Grouped by File)**
+
+### **1. `checkpoint_agent/__main__.py`**
+#### **Modified Functions:**
+- **`install_ci_workflow(target_dir=".")`**
+  - **Added:** Auto-generation of a **default `.checkpoint.yaml`** with predefined settings:
+    - LLM: Mistral (`mistral-medium-2508`), temperature `0.7`, max tokens `2000`.
+    - Repository: Output dir `./checkpoints`, ignores `node_modules`, `venv`, etc.
+    - Features: Diagrams enabled (`true`), git hooks disabled (`false`).
+  - **Removed:** Python 3.8 fallback (now assumes 3.9+).
+  - **Updated:** Post-install instructions to include committing `.checkpoint.yaml`.
+
+- **`main()`**
+  - **Removed:** `--init` flag and associated `run_setup_wizard()` call.
+  - **Updated:** Help text to reflect `--install-ci` as the primary setup method.
+
+#### **Key Lines Changed:**
+- **Lines 44–100:** Expanded `install_ci_workflow()` to include config generation.
+- **Lines 132–142:** Removed `--init` from CLI help.
+- **Lines 165–170:** Removed setup wizard invocation.
+
+---
+
+### **2. `checkpoint_agent/setup_wizard.py`**
+#### **Removed:**
+- **Entire setup wizard logic** (280 lines deleted):
+  - Interactive prompts (`_select()`, language detection, model selection).
+  - Config validation and git hook installation.
+  - **Only retained:** `show_current_config()` (renamed from `check_config_status()`).
+
+#### **New Purpose:**
+- Now a **utility module** for displaying existing configs (no interactive setup).
+
+#### **Key Changes:**
+- **File reduced from 300+ to 20 lines.**
+- **Removed dependencies:** `detect_languages()`, `run_setup_wizard()`, `get_default_model_for_provider()`.
+
+---
+
+### **3. `pyproject.toml`**
+#### **Modified:**
+- **Version bump:** `1.0.5` → `1.0.6` (semantic versioning: **backward-compatible feature addition**).
+
+---
+
+## **Impact (Architectural and Downstream Effects)**
+
+### **1. Architectural Simplification**
+- **Removed Complexity:**
+  - No longer maintains duplicate config paths (wizard vs. manual `.checkpoint.yaml`).
+  - Eliminates the need for language detection and interactive validation.
+- **Single Source of Truth:**
+  - `.checkpoint.yaml` is now the **only** config method (no wizard-generated overrides).
+
+### **2. User Workflow Changes**
+| **Before**                          | **After**                                  |
+|-------------------------------------|--------------------------------------------|
+| Run `checkpoint --init` → wizard    | Run `checkpoint --install-ci` → auto-config |
+| Manual git hook setup               | GitHub Actions only (no local hooks)       |
+| 5+ interactive prompts              | Zero prompts (defaults provided)           |
+
+- **Breaking Change:**
+  Users who relied on the wizard’s **language detection** or **custom git hooks** must now manually edit `.checkpoint.yaml`.
+
+### **3. Downstream Effects**
+- **Git Hook Module (`git_hook_installer.py`):**
+  - Still exists but **only used for `--uninstall`** (no new installations).
+- **Config Module (`config.py`):**
+  - Unchanged, but **no longer needs to support wizard-specific validation**.
+- **Documentation:**
+  - Must be updated to reflect `--install-ci` as the primary setup method.
+
+---
+
+## **Priority Rating**
+**HIGH** – This change removes a major onboarding friction point and simplifies maintenance, but requires documentation updates and may affect users relying on the old wizard.
+
+---
+### **Action Items for Reviewers**
+1. **Test:** Verify `checkpoint --install-ci` generates a valid `.checkpoint.yaml`.
+2. **Document:** Update `README.md` to remove wizard references.
+3. **Monitor:** Check for user reports of missing wizard functionality (e.g., language detection).
+
+---
+
 ## Commit `617b4d2` — 2026-03-12
 
 # **Checkpoint Document: GitHub Actions & Version Bump Update**

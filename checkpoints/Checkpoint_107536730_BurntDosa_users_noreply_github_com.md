@@ -43,7 +43,7 @@ The project has undergone **major architectural shifts**—most critically, a **
    - **Action Required**:
      - Update `actions/checkout` steps in GitHub Actions:
        ```yaml
-       - uses: actions/checkout@v3
+       - uses: actions/checkout@v4
          with:
            repository: BurntDosa/Checkpoint  # NEW
        ```
@@ -120,16 +120,14 @@ The project has undergone **major architectural shifts**—most critically, a **
      - Verify workflow compatibility with new action versions.
      - Update CI/CD pipelines to use the new version.
 
----
+### 11. **Setup Wizard Removal**
+   - **Files**: `checkpoint_agent/__main__.py`, `checkpoint_agent/setup_wizard.py`, `pyproject.toml`
+   - **Impact**:
+     - **Removed interactive setup**: The `--init` flag and `run_setup_wizard()` are gone.
+     - **Auto-generated config**: `checkpoint --install-ci` now creates a default `.checkpoint.yaml` with sensible defaults.
+     - **Version bump**: `1.0.5` → `1.0.6`.
+   - **Action Required**:
+     - Update documentation to remove references to the setup wizard.
+     - Use `checkpoint --install-ci` for new setups.
 
-## New Features & Additions
-
-### 1. **GitHub Actions Integration**
-   - **Auto-triggered checkpoints**: Runs on `push`, `pull_request`, and `merge` to `main`.
-   - **Multi-email skip**: `--catchup-skip` now accepts comma-separated emails (e.g., `--catchup-skip "dev1@company.com,dev2@company.com"`).
-   - **Workflows**:
-     - `checkpoint --install-ci` generates a preconfigured `.github/workflows/checkpoint.yml`.
-     - Outputs are auto-staged with `git add checkpoints/`.
-
-### 2. **LiteLLM Provider Flexibility**
-   - **Support for 50+ providers**:
+### 12. **
