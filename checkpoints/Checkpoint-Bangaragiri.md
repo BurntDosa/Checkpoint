@@ -1,3 +1,68 @@
+## Commit `70f155c` — 2026-03-12
+
+# **Checkpoint Agent CLI Initialization Enhancement - Checkpoint Document**
+
+## **Context**
+The `checkpoint-agent` tool previously used `--install-ci` to set up GitHub Actions workflows, but this approach had two key limitations:
+1. **Missing Default Configuration**: Users had to manually create a `.checkpoint.yaml` file after installation, leading to a fragmented onboarding experience.
+2. **Naming Misalignment**: The `--install-ci` flag name was too narrow—it suggested CI setup only, while the tool actually bootstraps the entire Checkpoint workflow (CI + local config).
+
+This change **renames the flag to `--init`** and **automates default config generation**, simplifying the first-time setup process. The version bump to `1.0.7` reflects this user-facing improvement.
+
+---
+
+## **Changes**
+
+### **1. `checkpoint_agent/__main__.py`**
+#### **CLI Argument Renaming & Help Text Updates**
+- **Flag Renaming**:
+  - **Old**: `--install-ci` → **New**: `--init`
+  - The underlying logic remains identical (still calls `install_ci_workflow(".")`), but the new name better reflects the broader initialization scope.
+- **Help Text Clarity**:
+  - Old: *"Install GitHub Actions workflow"* → New: *"Install GitHub Actions workflow **and create default .checkpoint.yaml**"* (emphasis added).
+- **Example Updates**:
+  - CLI examples in the `epilog` now use `--init` instead of `--install-ci` for consistency.
+
+#### **Argument Parsing Logic**
+- Line **205**: The conditional check `if args.install_ci:` → `if args.init:` to match the new flag name. No functional change to the workflow installation logic.
+
+### **2. `pyproject.toml`**
+#### **Version Bump**
+- **Old**: `version = "1.0.6"` → **New**: `version = "1.0.7"`
+  - Justification: This is a **user-facing improvement** (enhanced onboarding), warranting a minor version increment per [semantic versioning](https://semver.org/).
+
+---
+
+## **Impact**
+
+### **Architectural Impact**
+- **None**: This is a **purely cosmetic + UX change**. The core `install_ci_workflow()` function (defined elsewhere in the codebase) is untouched. The change only affects:
+  - CLI argument naming (`--init` vs. `--install-ci`).
+  - Help text clarity.
+  - Version metadata.
+
+### **Downstream Effects**
+1. **User Workflows**:
+   - **Breaking Change**: Users upgrading from `1.0.6` must replace `--install-ci` with `--init` in their scripts/automation. The old flag will **fail silently** (no error, but no action).
+   - **New Behavior**: Running `checkpoint --init` now **automatically generates a default `.checkpoint.yaml`**, reducing manual setup steps.
+
+2. **Documentation**:
+   - All user-facing docs (README, tutorials) must update:
+     - Flag references (`--init` instead of `--install-ci`).
+     - Version number (`1.0.7`).
+   - The `--help` output now accurately describes the config generation step.
+
+3. **Testing**:
+   - **CLI Tests**: Any tests validating the `--install-ci` flag must be updated to use `--init`.
+   - **Integration Tests**: Verify that `.checkpoint.yaml` is created with default values during `--init`.
+
+---
+
+## **Priority Rating**
+**MEDIUM** – This is a user-facing improvement with a minor breaking change (flag rename), but it doesn’t affect core functionality or introduce risk of data loss. Update documentation and tests in the same PR cycle.
+
+---
+
 ## Commit `ca0e205` — 2026-03-12
 
 # **Checkpoint Document: GitHub Actions Workflow & Configuration Simplification**
