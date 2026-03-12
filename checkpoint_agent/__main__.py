@@ -44,9 +44,10 @@ def get_file_tree(path="."):
         return "File structure unavailable."
 
 def install_ci_workflow(target_dir="."):
-    """Copy bundled GitHub Actions workflow template to target repo."""
+    """Install GitHub Actions workflow and create default .checkpoint.yaml."""
     import importlib.resources as pkg_resources
 
+    # Install workflow
     dest_dir = Path(target_dir) / ".github" / "workflows"
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest_file = dest_dir / "checkpoint.yml"
@@ -58,19 +59,56 @@ def install_ci_workflow(target_dir="."):
             return False
 
     try:
-        # Python 3.9+ path
         with pkg_resources.files("checkpoint_agent").joinpath("templates/checkpoint.yml").open("r") as f:
             content = f.read()
     except AttributeError:
-        # Fallback for Python 3.8
         src = Path(__file__).parent / "templates" / "checkpoint.yml"
         content = src.read_text()
 
     dest_file.write_text(content)
     print(f"✅ GitHub Actions workflow installed at {dest_file}")
-    print("   Next steps:")
-    print("   1. Add your LLM API key as a GitHub secret (e.g. MISTRAL_API_KEY)")
-    print("   2. Commit and push: git add .github/workflows/checkpoint.yml && git commit -m 'ci: add checkpoint workflow'")
+
+    # Create default .checkpoint.yaml if it doesn't exist
+    config_file = Path(target_dir) / ".checkpoint.yaml"
+    if not config_file.exists():
+        default_config = """llm:
+  provider: mistral
+  model: mistral-medium-2508
+  temperature: 0.7
+  max_tokens: 2000
+
+repository:
+  output_dir: ./checkpoints
+  master_context_file: MASTER_CONTEXT.md
+  ignore_patterns:
+    - node_modules
+    - venv
+    - .venv
+    - .git
+    - build
+    - dist
+    - __pycache__
+  file_patterns:
+    - "**/*.py"
+    - "**/*.js"
+    - "**/*.ts"
+    - "**/*.yaml"
+    - "**/*.yml"
+    - "**/*.toml"
+
+features:
+  git_hook: false
+  diagrams: true
+  vector_db: false
+  auto_catchup: false
+"""
+        config_file.write_text(default_config)
+        print(f"✅ Default config created at {config_file}")
+
+    print("\n   Next steps:")
+    print("   1. Add your LLM API key as a GitHub Secret (e.g. MISTRAL_API_KEY)")
+    print("   2. git add .github/workflows/checkpoint.yml .checkpoint.yaml && git commit -m 'ci: add checkpoint'")
+    print("   3. git push — checkpoints will be auto-generated on every push & PR")
     return True
 
 
@@ -132,7 +170,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  checkpoint init                    # Run setup wizard
+  checkpoint --install-ci            # Install GitHub Actions workflow
   checkpoint --onboard               # Generate master context
   checkpoint --catchup               # Generate your catchup summary  
   checkpoint --commit abc123         # Analyze specific commit
@@ -142,7 +180,6 @@ Examples:
     )
     
     # Setup/config commands
-    parser.add_argument("--init", action="store_true", help="Run interactive setup wizard")
     parser.add_argument("--install-ci", action="store_true", help="Install GitHub Actions workflow into .github/workflows/checkpoint.yml")
     parser.add_argument("--config", action="store_true", help="Show current configuration")
     parser.add_argument("--uninstall", action="store_true", help="Uninstall git hook")
@@ -165,11 +202,6 @@ Examples:
     args = parser.parse_args()
     
     # Handle setup/config commands first (don't need LLM config)
-    if args.init:
-        from checkpoint_agent.setup_wizard import run_setup_wizard
-        success = run_setup_wizard()
-        sys.exit(0 if success else 1)
-
     if args.install_ci:
         success = install_ci_workflow(".")
         sys.exit(0 if success else 1)
