@@ -1,3 +1,56 @@
+## Commit `617b4d2` — 2026-03-12
+
+# **Checkpoint Document: GitHub Actions & Version Bump Update**
+
+## **Context (Background on Why This Change Exists)**
+This change addresses two key maintenance updates:
+
+1. **GitHub Actions Dependencies** – The `actions/checkout` and `actions/setup-python` actions were updated to their latest stable versions (`v4` → `v5` for `setup-python`, `v3` → `v4` for `checkout`). This follows GitHub’s deprecation warnings for older versions and ensures compatibility with newer runner environments. The `python-version` remains pinned to `3.12` (no runtime changes).
+
+2. **Version Bump** – The project version in `pyproject.toml` was incremented from `1.0.4` to `1.0.5` to reflect these dependency updates. This follows semantic versioning (patch-level bump for dependency updates).
+
+## **Changes (Grouped by File with Specifics)**
+
+### **1. `checkpoint_agent/templates/checkpoint.yml`**
+This file defines the GitHub Actions workflow for the **Checkpoint Agent CI/CD pipeline**. Three job sections were updated:
+
+#### **Job: `build_and_test` (Line 17)**
+- **`actions/checkout`**: Updated from `v3` → `v4`
+- **`actions/setup-python`**: Updated from `v4` → `v5`
+- **No changes** to `fetch-depth: 0` or Python version (`3.12`).
+
+#### **Job: `pr_validation` (Line 89)**
+- Same updates as above (`checkout@v4`, `setup-python@v5`).
+- **No changes** to PR-specific logic (e.g., `ref: ${{ github.event.pull_request.head.ref }}`).
+
+#### **Job: `post_merge_check` (Line 152)**
+- Same updates as above (`checkout@v4`, `setup-python@v5`).
+- **No changes** to base-branch checkout logic.
+
+### **2. `pyproject.toml` (Line 4)**
+- **`version`**: Incremented from `1.0.4` → `1.0.5` (patch bump).
+
+## **Impact (Architectural and Downstream Effects)**
+
+### **1. GitHub Actions Updates**
+- **Compatibility**: Newer action versions may include security patches, performance improvements, or bug fixes. No breaking changes are expected, as the input parameters remain identical.
+- **Downstream**: No impact on the **Checkpoint Agent** codebase itself—only the CI/CD environment.
+- **Risk**: Minimal. GitHub Actions versions are backward-compatible, and the workflow logic is unchanged.
+
+### **2. Version Bump**
+- **Packaging**: The new version (`1.0.5`) will be used for future releases (e.g., `pip install checkpoint-agent==1.0.5`).
+- **Downstream**: Consumers of the package will need to update their dependencies if they pin versions.
+
+## **Priority Rating**
+**MEDIUM** – This is a routine maintenance update with no functional changes, but it ensures CI/CD reliability and version accuracy.
+
+---
+**Next Steps for Reviewers**:
+- Verify the workflow runs successfully with the new action versions.
+- Confirm the version bump aligns with release plans.
+
+---
+
 ## Commit `3fda053` — 2026-03-12
 
 # **Checkpoint Document: LLM Diagram Generation Refactor**

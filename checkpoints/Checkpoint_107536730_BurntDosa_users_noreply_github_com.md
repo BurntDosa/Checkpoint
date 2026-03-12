@@ -1,4 +1,4 @@
-Here's the updated catchup document incorporating all new checkpoints while preserving existing information:
+Here's the fully updated catchup document with all new checkpoints incorporated while preserving existing information:
 
 ```markdown
 # While You Were Gone — Since 2026-03-06 12:17:08+05:30
@@ -111,6 +111,15 @@ The project has undergone **major architectural shifts**—most critically, a **
      - Update tests to mock `litellm.completion` instead of DSPy methods.
      - Verify diagram prompts for your use case.
 
+### 10. **GitHub Actions & Version Bump Update**
+   - **Files**: `checkpoint_agent/templates/checkpoint.yml`, `pyproject.toml`
+   - **Impact**:
+     - **Updated GitHub Actions**: `actions/checkout@v4` and `actions/setup-python@v5`.
+     - **Version bump**: `1.0.4` → `1.0.5`.
+   - **Action Required**:
+     - Verify workflow compatibility with new action versions.
+     - Update CI/CD pipelines to use the new version.
+
 ---
 
 ## New Features & Additions
@@ -123,9 +132,4 @@ The project has undergone **major architectural shifts**—most critically, a **
      - Outputs are auto-staged with `git add checkpoints/`.
 
 ### 2. **LiteLLM Provider Flexibility**
-   - **Support for 50+ providers**: Use strings like `"groq/llama3-70b"` or `"mistral/mistral-small"` in config.
-   - **Simplified routing**: `drop_params=True` ignores unsupported args (e.g., `top_p` for Mistral).
-   - **Debugging**: Enable with `litellm.set_verbose=True`.
-
-### 3. **Prompt Guardrails**
-   - **Anti-hallucination disclaimers**: Catchup templates now explicitly forbid invented metadata (e.g., PR numbers, team names).
+   - **Support for 50+ providers**:
