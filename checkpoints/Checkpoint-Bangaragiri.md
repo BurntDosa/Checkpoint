@@ -1,3 +1,115 @@
+## Commit `24a017b` — 2026-03-12
+
+# **Checkpoint Agent v2.1.0 - Setup Flow Simplification**
+*Last Updated: [Insert Date]*
+
+---
+
+## **Context (Background on Why This Change Exists)**
+The original `checkpoint-agent` setup flow required **three separate commands** (`--init`, `--install-ci`, `--onboard`) and an interactive wizard to configure the tool. This created friction for new users, especially in CI/CD environments where manual steps are undesirable.
+
+Key pain points addressed:
+1. **Redundant Commands**: Users had to run `--install-ci` separately after `--init`, despite both being setup-related.
+2. **Interactive Blockers**: The wizard (`setup_wizard.py`) forced manual input, complicating automated deployments.
+3. **Unclear Workflow**: The distinction between `--init` (config) and `--install-ci` (GitHub Actions) was confusing.
+
+This change **streamlines setup into a single command** (`--init`) and removes the interactive wizard in favor of a **GitHub-Secrets-first** approach, aligning with modern DevOps practices.
+
+---
+
+## **Changes (Grouped by File with Specifics)**
+
+### **1. `README.md` (User-Facing Documentation)**
+**Purpose**: Update instructions to reflect the simplified workflow.
+
+#### **Key Modifications**:
+- **Removed Commands**:
+  - `--install-ci` (merged into `--init`)
+  - `--onboard` (now auto-triggered via GitHub Actions)
+  - `--install-hook`/`--uninstall` (deprecated in favor of CI-based generation)
+- **New Workflow**:
+  - `--init` now **bundles** config generation *and* GitHub Actions setup.
+  - API keys are **only** configured via GitHub Secrets (no local `.env` file).
+- **Clarified Auto-Generation**:
+  - `MASTER_CONTEXT.md` and catchups are now **automatically generated** on push (via CI), not manually.
+
+#### **Specific Line Changes**:
+| **Section**               | **Before**                          | **After**                                  |
+|---------------------------|-------------------------------------|--------------------------------------------|
+| Quickstart                | 3-step manual setup                 | 1-step `--init` + GitHub Secrets           |
+| Commands                  | 7 commands                          | 4 commands (removed redundant setup steps) |
+| GitHub Actions            | Required `--install-ci`             | Auto-installed via `--init`                |
+
+---
+
+### **2. `checkpoint_agent/setup_wizard.py` (Internal Refactor)**
+**Purpose**: Repurpose the module from interactive setup to **config utilities**.
+
+#### **Key Modifications**:
+- **Removed**:
+  - `InteractiveSetupWizard` class (previously handled API key input, config prompts).
+  - CLI prompts for LLM provider/model (now **only** via GitHub Secrets).
+- **Added**:
+  - `validate_config()`: Validates `.checkpoint.yaml` structure.
+  - `generate_default_config()`: Creates a template config with placeholders (e.g., `model: "mistral-small"`).
+
+#### **Impact on Codebase**:
+- The `checkpoint --init` command now:
+  1. Calls `generate_default_config()` to write `.checkpoint.yaml`.
+  2. Copies the GitHub Actions workflow template (`templates/checkpoint.yml`) to `.github/workflows/`.
+  3. **Skips** the old wizard entirely.
+
+---
+
+### **3. `checkpoint_agent/templates/checkpoint.yml` (CI Workflow)**
+**Purpose**: Ensure the bundled GitHub Actions workflow supports auto-generation.
+
+#### **Key Changes**:
+- **New Environment Variables**:
+  - `MISTRAL_API_KEY` (or `OPENAI_API_KEY`) are now **required** as GitHub Secrets.
+  - Added `CHECKPOINT_AUTO_ONBOARD: "true"` to enable auto-generation of `MASTER_CONTEXT.md` on push.
+- **Trigger Logic**:
+  - Workflow runs on `push` to `main`/`master` (previously required manual `--onboard`).
+
+---
+
+## **Impact (Architectural and Downstream Effects)**
+
+### **1. Architectural Improvements**
+- **Simplified Entry Point**:
+  - `--init` is now the **single source of truth** for setup, reducing cognitive load.
+  - Removes dependency on `git_hook_installer.py` (local hooks were rarely used).
+- **CI-First Design**:
+  - Shifts configuration to GitHub Secrets, improving security (no local `.env` files).
+  - Auto-generation aligns with GitOps principles (changes trigger docs updates).
+
+### **2. Downstream Effects**
+| **Area**               | **Impact**                                                                 | **Action Required**                          |
+|-------------------------|----------------------------------------------------------------------------|---------------------------------------------|
+| **New Users**           | Faster onboarding (1 command → done).                                     | Update internal docs to reflect new flow.   |
+| **Existing Users**      | Must re-run `--init` to get the new workflow file.                        | Delete old `.github/workflows/checkpoint.yml` before re-running. |
+| **CI/CD Pipelines**     | No more manual `--onboard` steps; auto-generates on push.                 | Ensure `MISTRAL_API_KEY` is set in Secrets.  |
+| **Local Development**   | `--catchup` still works, but `--onboard` is now CI-only.                  | Use `--catchup --local` for offline testing.|
+
+### **3. Backward Compatibility**
+- **Breaking Changes**:
+  - `--install-ci`, `--onboard`, and `--install-hook` are **removed**.
+  - `.env` files are **no longer supported** (GitHub Secrets only).
+- **Migration Path**:
+  ```bash
+  rm -f .env .github/workflows/checkpoint.yml  # Clean up old files
+  checkpoint --init                           # Re-initialize
+  gh secret set MISTRAL_API_KEY -b"YOUR_KEY"  # Set GitHub Secret
+  ```
+
+---
+
+## **Priority Rating**
+**HIGH**
+*Justification*: This change removes a major onboarding friction point and aligns the tool with modern CI/CD practices, but requires users to update their workflows (breaking change). The security improvement (GitHub Secrets over `.env`) and auto-generation justify the priority.
+
+---
+
 ## Commit `70f155c` — 2026-03-12
 
 # **Checkpoint Agent CLI Initialization Enhancement - Checkpoint Document**
