@@ -2,7 +2,7 @@ Here's the updated catchup document incorporating all new checkpoints while pres
 
 ```markdown
 # While You Were Gone — Since 2026-03-06 12:17:08+05:30
-The project has undergone **major architectural shifts**—most critically, a **migration from DSPy to LiteLLM** for LLM orchestration, a **switch from local git hooks to GitHub Actions**, and a **repository ownership transfer** to `BurntDosa/Checkpoint`. These changes break backward compatibility in key areas (CLI workflows, LLM abstractions, and config handling), but they resolve long-standing issues like hook failures, ChromaDB overhead, and provider limitations. **Your immediate focus should be on updating LLM-related code, CI/CD pipelines, and GitHub Actions workflows.**
+The project has undergone **major architectural shifts**—most critically, a **migration from DSPy to LiteLLM** for LLM orchestration, a **switch from local git hooks to GitHub Actions**, a **repository ownership transfer** to `BurntDosa/Checkpoint`, and a **storage refactor** to per-author living documents. These changes break backward compatibility in key areas (CLI workflows, LLM abstractions, config handling, and storage), but they resolve long-standing issues like hook failures, ChromaDB overhead, provider limitations, and file proliferation. **Your immediate focus should be on updating LLM-related code, CI/CD pipelines, GitHub Actions workflows, and storage handling.**
 
 ---
 
@@ -88,6 +88,18 @@ The project has undergone **major architectural shifts**—most critically, a **
      - Update internal documentation to reflect GitHub Actions workflows.
      - Remove references to ChromaDB or vector search.
 
+### 8. **Storage Refactor: Per-Author Living Documents**
+   - **Files**: `checkpoint_agent/storage.py`, `checkpoint_agent/templates/checkpoint.yml`, `pyproject.toml`
+   - **Impact**:
+     - **New storage model**: Each author’s checkpoints are now appended to a single file (`Checkpoint-[Author].md`), sorted chronologically (newest first).
+     - **Master Context**: New `MASTER_CONTEXT.md` file for project-wide onboarding.
+     - **Date filtering**: Moved from filename parsing to content parsing (LLM now extracts dates from commit headers).
+     - **Backward compatibility**: Old checkpoint files persist but are not migrated automatically.
+   - **Action Required**:
+     - Update any code parsing checkpoint filenames for dates.
+     - Review LLM prompts to ensure they handle the new file format (commit headers in content).
+     - Consider a manual migration script for old checkpoint files.
+
 ---
 
 ## New Features & Additions
@@ -118,32 +130,7 @@ The project has undergone **major architectural shifts**—most critically, a **
    | `--install-ci`        | Generates a GitHub Actions workflow file.                               |
    | `--stats`             | Shows checkpoint generation metrics (e.g., files processed, LLM tokens). |
    | `--catchup-skip`      | Skips multiple emails (comma-separated).                                |
+   | `--onboard`           | Generates `MASTER_CONTEXT.md` for project-wide onboarding.               |
 
 ### 5. **Published Package Installation**
-   - **GitHub Actions workflows** now install the published `checkpoint-agent` package instead of local code.
-   - **Benefits**:
-     - Deterministic dependency resolution.
-     - Alignment with production deployments.
-   - **Action Required**:
-     - Publish `checkpoint-agent` to PyPI (or your configured index).
-
----
-
-## Refactors & Structural Changes
-
-### 1. **Agents Simplified**
-   - **File**: `checkpoint_agent/agents.py`
-   - **Before**: 520 lines (DSPy abstractions).
-   - **After**: 160 lines (raw LiteLLM calls).
-   - **Key changes**:
-     - `CheckpointGenerator`, `CatchupGenerator`: Now flat classes with `__call__` methods.
-     - Prompts are **inline strings** (no `dspy.InputField`).
-     - Returns `SimpleNamespace` (replaces `dspy.Prediction`).
-
-### 2. **Configuration Overhaul**
-   - **File**: `.checkpoint.yaml`
-   - **Removed keys**:
-     ```yaml
-     vector_db: true
-     vector_db_path: ./chroma
-     ignore_patterns:
+   - **GitHub Actions workflows**
