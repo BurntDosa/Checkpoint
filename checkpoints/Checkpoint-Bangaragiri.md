@@ -1,3 +1,125 @@
+## Commit `7655cd6` — 2026-03-12
+
+# **Checkpoint Document: LiteLLM Migration & CI Workflow Overhaul**
+
+## **Context**
+This change **removes DSPy and LangGraph dependencies**, migrating the entire LLM pipeline to **LiteLLM** for simplicity and maintainability. The motivation stems from:
+1. **Dependency bloat**: DSPy and LangGraph added ~150MB to the project and introduced version conflicts with other tools.
+2. **Over-engineering**: The original `StateGraph` in `graph.py` was unnecessary for the linear commit analysis flow.
+3. **CI friction**: The setup process (`--init`) was fragmented, requiring multiple steps and lacking a boilerplate `MASTER_CONTEXT.md`.
+
+Key goals:
+- Simplify the LLM stack to **only LiteLLM** (already used for provider routing).
+- Consolidate `--init` into a single command that installs **CI workflow + config + boilerplate**.
+- Improve cross-platform compatibility (Windows support in `get_file_tree()`).
+- Truncate oversized diffs (>12KB) to avoid LLM token limits.
+
+---
+
+## **Changes**
+
+### **1. `checkpoint_agent/__main__.py` (CLI)**
+- **Removed commands**:
+  - `--install-ci` (merged into `--init`).
+  - `--setup-wizard` (interactive mode now optional in `--init`).
+- **Modified commands**:
+  - `--init`: Now **installs CI workflow**, generates `.checkpoint.yaml`, and creates a boilerplate `MASTER_CONTEXT.md`.
+- **Architecture updates**:
+  - Replaced `LangGraph` references with `run_pipeline()` (now a simple linear flow in `graph.py`).
+  - Updated docstring to reflect **LiteLLM-only** stack.
+
+### **2. `checkpoint_agent/graph.py`**
+- **Removed**:
+  - `StateGraph` and all LangGraph-related code.
+  - `configure_llm()` call (moved to `agents.py` initialization).
+- **Added**:
+  - **Diff truncation** (12KB limit) to prevent LLM token overflow.
+  - Simplified `run_pipeline()`: now just calls `CheckpointGenerator()` and saves the result.
+
+### **3. `checkpoint_agent/agents.py`**
+- **Replaced**:
+  - DSPy-based `Signature`/`ChainOfThought` with **native LiteLLM calls**.
+  - `MasterContextGenerator` and `CatchupGenerator` now subclass `LiteLLMGenerator` (custom wrapper).
+- **Added**:
+  - **Fallback handling** for truncated LLM outputs (appends `[... truncated ...]`).
+
+### **4. `checkpoint_agent/git_utils.py`**
+- **Fixed**:
+  - `get_diff()` now properly decodes binary diffs (previously failed on non-UTF-8 files).
+- **Removed**:
+  - Deprecated `get_active_authors()` (replaced by `get_active_authors_with_last_commits()`).
+- **Optimized**:
+  - Reduced rate-limit delay from **60s → 5s** between author processing.
+
+### **5. `checkpoint_agent/config.py`**
+- **Removed**:
+  - `git_hook` and `vector_db` feature flags (ChromaDB was unused; hooks are now CI-only).
+- **Fixed**:
+  - Typo in `config.model_dump()` (was `config. model_dump()`).
+
+### **6. `checkpoint_agent/llm.py`**
+- **Added**:
+  - **Configurable SSL verification** (env var `CHECKPOINT_SSL_VERIFY=false` for corporate proxies).
+  - Explicit `"not-needed"` return for local providers (e.g., Ollama).
+- **Changed**:
+  - Default `max_tokens` increased from **2K → 8K** to accommodate larger diffs.
+
+### **7. `checkpoint_agent/storage.py`**
+- **File naming**:
+  - Checkpoints now use **stable per-author filenames** (`Checkpoint-AuthorName.md`) instead of timestamps.
+- **Added**:
+  - `INITIAL_MASTER_CONTEXT_TEMPLATE` for boilerplate generation during `--init`.
+
+### **8. `checkpoint_agent/setup_wizard.py`**
+- **Simplified**:
+  - Removed `questionary`-based interactive mode (now just installs defaults).
+
+### **9. `CLAUDE.md` (Documentation)**
+- **Updated**:
+  - Removed DSPy/LangGraph references.
+  - Added **Windows compatibility notes** and **SSL proxy instructions**.
+
+---
+
+## **Impact**
+
+### **Architectural Changes**
+1. **Dependency Reduction**:
+   - **Removed**: DSPy, LangGraph, ChromaDB (~150MB saved).
+   - **Kept**: LiteLLM (already used for provider routing), GitPython, Pydantic.
+2. **Pipeline Simplification**:
+   - Replaced `StateGraph` with a linear `run_pipeline()` (easier to debug).
+   - **No more vector DB**: ChromaDB was unused; checkpoints are now plain markdown.
+3. **CI Integration**:
+   - `--init` now **atomically sets up everything** (workflow + config + boilerplate).
+
+### **Downstream Effects**
+- **Breaking Changes**:
+  - **Timestamped filenames → Author-stable filenames**: Scripts parsing `checkpoints/` must update.
+  - **Config flags removed**: `git_hook` and `vector_db` are no longer in `.checkpoint.yaml`.
+- **Performance**:
+  - **Faster setup**: No DSPy/LangGraph initialization overhead.
+  - **Lower memory usage**: No ChromaDB in-memory index.
+- **Cross-Platform**:
+  - `get_file_tree()` now works on **Windows** (pure-Python fallback).
+
+### **User-Facing Changes**
+- **New workflow**:
+  ```bash
+  checkpoint --init  # Installs CI + config + MASTER_CONTEXT.md
+  git add .github/workflows/checkpoint.yml .checkpoint.yaml MASTER_CONTEXT.md
+  git commit -m "ci: add checkpoint"
+  ```
+- **Truncated outputs**:
+  - Diffs >12KB and checkpoints >8K tokens are truncated with `[... truncated ...]`.
+
+---
+
+## **Priority Rating**
+**HIGH** – This change removes major dependencies and simplifies the architecture, but requires updates to CI scripts and filename parsing logic. The risk is mitigated by the reduced complexity and improved cross-platform support.
+
+---
+
 ## Commit `24a017b` — 2026-03-12
 
 # **Checkpoint Agent v2.1.0 - Setup Flow Simplification**
