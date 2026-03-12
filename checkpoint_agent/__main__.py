@@ -170,7 +170,7 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  checkpoint --install-ci            # Install GitHub Actions workflow
+  checkpoint --init                  # Install GitHub Actions workflow + create config
   checkpoint --onboard               # Generate master context
   checkpoint --catchup               # Generate your catchup summary  
   checkpoint --commit abc123         # Analyze specific commit
@@ -180,7 +180,7 @@ Examples:
     )
     
     # Setup/config commands
-    parser.add_argument("--install-ci", action="store_true", help="Install GitHub Actions workflow into .github/workflows/checkpoint.yml")
+    parser.add_argument("--init", action="store_true", help="Install GitHub Actions workflow and create default .checkpoint.yaml")
     parser.add_argument("--config", action="store_true", help="Show current configuration")
     parser.add_argument("--uninstall", action="store_true", help="Uninstall git hook")
     parser.add_argument("--install-hook", action="store_true", help="Install git hook")
@@ -202,7 +202,7 @@ Examples:
     args = parser.parse_args()
     
     # Handle setup/config commands first (don't need LLM config)
-    if args.install_ci:
+    if args.init:
         success = install_ci_workflow(".")
         sys.exit(0 if success else 1)
 
