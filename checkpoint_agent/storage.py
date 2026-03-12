@@ -12,26 +12,34 @@ def ensure_checkpoint_dir():
 
 def save_checkpoint(content: str, commit_hash: str, author: str = None) -> str:
     """
-    Saves the markdown content to a file.
-    Format: Checkpoint-[AuthorName]-[YYYY-MM-DD]-[short_hash].md
+    Saves the markdown content to a stable per-author file, prepending the new
+    commit entry so the file grows as a living document (newest first).
+    Format: Checkpoint-[AuthorName].md
     Returns the absolute path of the saved file.
     """
     ensure_checkpoint_dir()
     date_str = datetime.datetime.now().strftime("%Y-%m-%d")
     short_hash = commit_hash[:7]
-    
-    # Sanitize Author Name
-    if author:
-        safe_author = "".join([c if c.isalnum() else "_" for c in author])
-        filename = f"Checkpoint-{safe_author}-{date_str}-{short_hash}.md"
-    else:
-        filename = f"{date_str}-{commit_hash}.md" # Fallback
-        
+
+    safe_author = "".join([c if c.isalnum() else "_" for c in author]) if author else "unknown"
+    filename = f"Checkpoint-{safe_author}.md"
     file_path = os.path.join(CHECKPOINT_DIR, filename)
-    
+
+    # Wrap new content with a commit header
+    entry = f"## Commit `{short_hash}` — {date_str}\n\n{content.strip()}"
+
+    # Prepend to existing content so newest is always at the top
+    existing = ""
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            existing = f.read().strip()
+
     with open(file_path, "w", encoding="utf-8") as f:
-        f.write(content)
-        
+        if existing:
+            f.write(entry + "\n\n---\n\n" + existing + "\n")
+        else:
+            f.write(entry + "\n")
+
     return os.path.abspath(file_path)
 
 def list_checkpoints():
@@ -55,45 +63,23 @@ def list_checkpoints():
 
 def get_checkpoints_since(since_date: datetime.datetime) -> list[str]:
     """
-    Returns the content of all checkpoints created after the given date.
-    Handles both naming formats:
-    - New: Checkpoint-Author-YYYY-MM-DD-hash.md
-    - Old: YYYY-MM-DD-hash.md
-    
-    Optimized with parallel file reading for better I/O performance.
+    Returns content of all checkpoint files. Since each file is a stable
+    per-author living document (newest first), the full content is returned
+    and the LLM filters by the since_date passed in the prompt.
     """
     checkpoints = list_checkpoints()
-    
-    # Pattern to extract date (YYYY-MM-DD) from filename
-    date_pattern = re.compile(r'(\d{4})-(\d{2})-(\d{2})')
-    
-    # Filter by date first (cheap operation)
-    valid_checkpoints = []
-    for cp in checkpoints:
-        try:
-            filename = cp.name
-            match = date_pattern.search(filename)
-            if match:
-                date_str = match.group(0)  # e.g., "2026-02-17"
-                cp_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
-                if cp_date.date() >= since_date.date():
-                    valid_checkpoints.append(cp)
-        except Exception as e:
-            # print(f"  Debug: Failed to parse date from {cp.name}: {e}")
-            continue
-    
-    # Parallel file reading with UTF-8 encoding
+
     def read_file(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
                 return f.read()
         except Exception:
             return ""
-    
+
     with ThreadPoolExecutor(max_workers=10) as executor:
-        active_checkpoints = list(executor.map(read_file, valid_checkpoints))
-    
-    return [content for content in active_checkpoints if content]
+        contents = list(executor.map(read_file, checkpoints))
+
+    return [c for c in contents if c]
 
 def get_checkpoint_stats() -> dict:
     """
@@ -117,8 +103,8 @@ def get_checkpoint_stats() -> dict:
 
     all_files = sorted(Path(CHECKPOINT_DIR).glob("*.md"))
     date_pattern = re.compile(r'(\d{4}-\d{2}-\d{2})')
-    # Checkpoint-AuthorName-YYYY-MM-DD-hash.md
-    commit_pattern = re.compile(r'^Checkpoint-(.+)-(\d{4}-\d{2}-\d{2})-[0-9a-f]+\.md$')
+    # Stable per-author format: Checkpoint-AuthorName.md
+    commit_pattern = re.compile(r'^Checkpoint-(.+)\.md$')
 
     commit_files = []
     authors = set()
@@ -141,15 +127,19 @@ def get_checkpoint_stats() -> dict:
             if m:
                 authors.add(m.group(1))
 
-    # Extract date range from commit checkpoint filenames
+    # Extract date range from commit checkpoint file contents
     dates = []
     for name in commit_files:
-        m = date_pattern.search(name)
-        if m:
-            try:
-                dates.append(datetime.datetime.strptime(m.group(1), "%Y-%m-%d").date())
-            except ValueError:
-                pass
+        try:
+            fp = Path(CHECKPOINT_DIR) / name
+            text = fp.read_text(encoding="utf-8", errors="ignore")
+            for m in date_pattern.finditer(text):
+                try:
+                    dates.append(datetime.datetime.strptime(m.group(1), "%Y-%m-%d").date())
+                except ValueError:
+                    pass
+        except Exception:
+            pass
 
     most_recent = sorted(commit_files)[-5:][::-1]
 
