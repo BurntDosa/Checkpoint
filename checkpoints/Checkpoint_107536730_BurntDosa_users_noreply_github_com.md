@@ -1,9 +1,13 @@
+Here's the updated catchup document incorporating all new checkpoints while preserving existing information:
+
+```markdown
 # While You Were Gone — Since 2026-03-06 12:17:08+05:30
 The project has undergone **major architectural shifts**—most critically, a **migration from DSPy to LiteLLM** for LLM orchestration, a **switch from local git hooks to GitHub Actions**, and a **repository ownership transfer** to `BurntDosa/Checkpoint`. These changes break backward compatibility in key areas (CLI workflows, LLM abstractions, and config handling), but they resolve long-standing issues like hook failures, ChromaDB overhead, and provider limitations. **Your immediate focus should be on updating LLM-related code, CI/CD pipelines, and GitHub Actions workflows.**
 
 ---
 
 ## Critical Changes (Must-Read)
+
 ### 1. **DSPy → LiteLLM Migration (Breaking)**
    - **Files**: `checkpoint_agent/agents.py`, `checkpoint_agent/llm.py`
    - **Impact**:
@@ -53,9 +57,41 @@ The project has undergone **major architectural shifts**—most critically, a **
      - Remove `vector_db: true` from `.checkpoint.yaml` (if present).
      - Replace any `CheckpointGenerator` calls expecting ChromaDB outputs.
 
+### 5. **Checkpoint Agent Installation Fix**
+   - **Files**: `checkpoint_agent/templates/checkpoint.yml`
+   - **Impact**:
+     - **GitHub Actions workflow** now installs the published `checkpoint-agent` package instead of local code.
+     - **Old**: `run: pip install .`
+     - **New**: `run: pip install checkpoint-agent`
+     - **Affected Jobs**: `checkpoint-update`, `checkpoint-pr`, `checkpoint-master`
+   - **Action Required**:
+     - Ensure `checkpoint-agent` is published to PyPI (or your configured index).
+     - Update CI/CD pipelines to avoid relying on local package state.
+
+### 6. **Checkpoint Agent Setup Wizard Migration**
+   - **Files**: `checkpoint_agent/setup_wizard.py`, `pyproject.toml`
+   - **Impact**:
+     - **API key handling removed**: No more `.env` file storage or interactive prompts.
+     - **GitHub Secrets required**: API keys (e.g., `MISTRAL_API_KEY`) must be stored in GitHub Secrets.
+     - **Git hooks disabled by default**: `.checkpoint.yaml` now sets `git_hook: false`.
+   - **Action Required**:
+     - Run `checkpoint --install-ci` to generate GitHub Actions workflow.
+     - Migrate API keys from `.env` to GitHub Secrets.
+
+### 7. **Documentation Overhaul**
+   - **Files**: `README.md`, `checkpoint_agent/graph.py`
+   - **Impact**:
+     - **Simplified value proposition**: Focus on `MASTER_CONTEXT.md` and `checkpoints/Checkpoint_<email>.md`.
+     - **GitHub Actions emphasis**: Local hooks are now opt-in (`git_hook: false`).
+     - **Removed features**: ChromaDB, semantic search, and AST parsing.
+   - **Action Required**:
+     - Update internal documentation to reflect GitHub Actions workflows.
+     - Remove references to ChromaDB or vector search.
+
 ---
 
 ## New Features & Additions
+
 ### 1. **GitHub Actions Integration**
    - **Auto-triggered checkpoints**: Runs on `push`, `pull_request`, and `merge` to `main`.
    - **Multi-email skip**: `--catchup-skip` now accepts comma-separated emails (e.g., `--catchup-skip "dev1@company.com,dev2@company.com"`).
@@ -83,9 +119,18 @@ The project has undergone **major architectural shifts**—most critically, a **
    | `--stats`             | Shows checkpoint generation metrics (e.g., files processed, LLM tokens). |
    | `--catchup-skip`      | Skips multiple emails (comma-separated).                                |
 
+### 5. **Published Package Installation**
+   - **GitHub Actions workflows** now install the published `checkpoint-agent` package instead of local code.
+   - **Benefits**:
+     - Deterministic dependency resolution.
+     - Alignment with production deployments.
+   - **Action Required**:
+     - Publish `checkpoint-agent` to PyPI (or your configured index).
+
 ---
 
 ## Refactors & Structural Changes
+
 ### 1. **Agents Simplified**
    - **File**: `checkpoint_agent/agents.py`
    - **Before**: 520 lines (DSPy abstractions).
@@ -101,10 +146,4 @@ The project has undergone **major architectural shifts**—most critically, a **
      ```yaml
      vector_db: true
      vector_db_path: ./chroma
-     ignore_patterns: ["*.lock"]
-     file_patterns: ["**.py"]
-     ```
-   - **New defaults**:
-     ```yaml
-     features:
-       git_hook: false  # Disabled by default
+     ignore_patterns:
