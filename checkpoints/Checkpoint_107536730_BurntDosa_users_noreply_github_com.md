@@ -100,6 +100,17 @@ The project has undergone **major architectural shifts**—most critically, a **
      - Review LLM prompts to ensure they handle the new file format (commit headers in content).
      - Consider a manual migration script for old checkpoint files.
 
+### 9. **LLM Diagram Generation Refactor**
+   - **Files**: `checkpoint_agent/llm_diagrams.py`, `pyproject.toml`
+   - **Impact**:
+     - **DSPy removed**: Diagram generation now uses direct LLM calls via `_call_llm` in `checkpoint_agent.agents`.
+     - **Simplified logic**: Replaced `DiagramGeneratorSignature` and `LLMDiagramGenerator` with raw prompts.
+     - **Fallback behavior**: Returns simple Mermaid graphs with error text if LLM calls fail.
+     - **Version bump**: `1.0.3` → `1.0.4`.
+   - **Action Required**:
+     - Update tests to mock `litellm.completion` instead of DSPy methods.
+     - Verify diagram prompts for your use case.
+
 ---
 
 ## New Features & Additions
@@ -118,19 +129,3 @@ The project has undergone **major architectural shifts**—most critically, a **
 
 ### 3. **Prompt Guardrails**
    - **Anti-hallucination disclaimers**: Catchup templates now explicitly forbid invented metadata (e.g., PR numbers, team names).
-   - **Example**:
-     ```markdown
-     IMPORTANT: Only include information explicitly stated in the checkpoints.
-     Do not invent team member names, owners, PR numbers, or work items.
-     ```
-
-### 4. **New CLI Commands**
-   | Command               | Purpose                                                                 |
-   |-----------------------|-------------------------------------------------------------------------|
-   | `--install-ci`        | Generates a GitHub Actions workflow file.                               |
-   | `--stats`             | Shows checkpoint generation metrics (e.g., files processed, LLM tokens). |
-   | `--catchup-skip`      | Skips multiple emails (comma-separated).                                |
-   | `--onboard`           | Generates `MASTER_CONTEXT.md` for project-wide onboarding.               |
-
-### 5. **Published Package Installation**
-   - **GitHub Actions workflows**

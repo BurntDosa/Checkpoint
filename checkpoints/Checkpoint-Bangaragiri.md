@@ -1,3 +1,71 @@
+## Commit `3fda053` — 2026-03-12
+
+# **Checkpoint Document: LLM Diagram Generation Refactor**
+
+## **Context (Background on Why This Change Exists)**
+The original implementation in `checkpoint_agent/llm_diagrams.py` relied on **DSPy (dspy)**, a framework for LLM-based programmatic reasoning. While DSPy provided structure, it introduced unnecessary complexity for this use case:
+1. **Overhead**: DSPy's `Signature` and `Module` abstractions were excessive for simple Mermaid diagram generation.
+2. **Dependency Bloat**: DSPy is a heavy dependency for a feature that only needed basic LLM prompting.
+3. **Maintenance Risk**: Future DSPy updates could break compatibility without clear benefits here.
+
+This refactor **removes DSPy** in favor of direct LLM calls via the existing `_call_llm` utility in `checkpoint_agent.agents`. The goal is **simpler, more maintainable** diagram generation while preserving functionality.
+
+---
+
+## **Changes (Grouped by File with Specific Function/Class Names)**
+
+### **1. `checkpoint_agent/llm_diagrams.py`**
+#### **Removed Components**
+- **`DiagramGeneratorSignature` (class)**: DSPy signature defining input/output fields for diagram generation.
+- **`LLMDiagramGenerator` (class)**: DSPy module wrapping the LLM call logic.
+
+#### **Modified Functions**
+- **`generate_diagrams_llm()`**:
+  - **Before**: Used `LLMDiagramGenerator.forward()` to generate diagrams.
+  - **After**: Directly calls `_call_llm` with two separate prompts (dependency graph and architecture diagram).
+  - **Key Changes**:
+    - Uses a shared `system_prompt` for architect persona.
+    - Splits the original DSPy call into two explicit LLM prompts (`dep_prompt`, `arch_prompt`).
+    - Adds error handling to return fallback diagrams if LLM calls fail.
+    - Removes DSPy-specific field formatting (now uses raw strings).
+
+- **`should_use_llm_diagrams()`**:
+  - Simplified logic to return `True` for **multi-language or non-Python repos**, `False` otherwise.
+  - Removed redundant comments and streamlined the conditional.
+
+#### **Unchanged Functions**
+- **`get_sample_files()`**: Retained as-is (file sampling logic unchanged).
+
+---
+
+### **2. `pyproject.toml`**
+- **Version Bump**: `1.0.3` → `1.0.4` to reflect the breaking change (DSPy removal).
+
+---
+
+## **Impact (Architectural and Downstream Effects)**
+
+### **1. Architectural Impact**
+- **Dependency Removal**: DSPy is no longer required, reducing the project’s dependency footprint.
+- **Simplified Flow**: Diagram generation now uses the existing `_call_llm` utility, aligning with other LLM interactions in the codebase.
+- **Error Resilience**: Explicit fallback diagrams (with error messages) improve robustness if LLM calls fail.
+
+### **2. Downstream Effects**
+- **API Compatibility**: The public interface (`generate_diagrams_llm`) remains unchanged—callers expect the same `(dependency_graph, architecture_diagram)` tuple.
+- **Performance**: Fewer abstraction layers may slightly improve latency (no DSPy overhead).
+- **Testing**: Existing tests for `generate_diagrams_llm` should still pass, but mocks may need updates to account for direct LLM calls instead of DSPy.
+
+### **3. Risks**
+- **Prompt Sensitivity**: The new implementation relies on manually crafted prompts. If the LLM’s response format drifts, diagrams may break.
+- **Fallback Behavior**: Error cases now return simple Mermaid graphs with error text, which may be less useful than the previous (potentially partial) DSPy outputs.
+
+---
+
+## **Priority Rating**
+**MEDIUM** – This is a **non-urgent refactor** that reduces complexity without altering core functionality, but teams using DSPy elsewhere should verify no shared dependency conflicts exist.
+
+---
+
 ## Commit `e341fd8` — 2026-03-12
 
 # **Checkpoint Agent Storage Refactor – Checkpoint Document**
