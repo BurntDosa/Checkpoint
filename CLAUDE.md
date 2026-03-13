@@ -44,7 +44,7 @@ python3 -m pytest tests/
 | `checkpoint_agent/graph.py` | `run_pipeline()` for commit analysis (analyze + save) |
 | `checkpoint_agent/llm.py` | LiteLLM-based config; `detect_provider_from_model()` auto-routes providers |
 | `checkpoint_agent/config.py` | Pydantic models (`CheckpointConfig`); loads from `.checkpoint.yaml` |
-| `checkpoint_agent/storage.py` | Save/list checkpoints and catchups (per-author markdown files under `checkpoints/`) |
+| `checkpoint_agent/storage.py` | Save/list checkpoints (`checkpoints/`) and catchups (`catchups/`); per-author stable filenames |
 | `checkpoint_agent/git_utils.py` | GitPython wrappers: diffs, commit metadata, author detection via `user.email` |
 | `checkpoint_agent/mermaid_utils.py` | AST-based Mermaid diagram generation (dependency graph, class hierarchy) |
 | `checkpoint_agent/llm_diagrams.py` | LLM-based diagram generation for non-Python languages |
@@ -58,11 +58,20 @@ python3 -m pytest tests/
 - `.env` — API keys (`MISTRAL_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.)
 - Config schema: `checkpoint_agent/config.py` Pydantic models (`LLMConfig`, `RepositoryConfig`, `FeaturesConfig`)
 
+## Folder Structure
+
+- `checkpoints/` — per-author commit checkpoint files (`Checkpoint-AuthorName.md`), PR summaries (`PR-*.md`)
+- `catchups/` — per-author catchup briefings (`Catchup_email.md`); separate from checkpoints so catchup lifecycle (create on catchup-all, delete on commit) doesn't pollute checkpoint history
+- `MASTER_CONTEXT.md` — generated onboarding document (root level)
+
+When a developer commits, their catchup file in `catchups/` is automatically deleted (they're caught up). The CI workflow uses `git add -A catchups/` to pick up both additions and deletions.
+
 ## Conventions
 
 - Small functions, broad try/except with user-facing prints for error handling
 - Lazy imports for heavy deps (GitPython, LiteLLM) — setup commands stay fast
 - Per-author stable filenames for checkpoints (`Checkpoint-AuthorName.md`)
+- Per-author stable filenames for catchups (`Catchup_email.md`) in `catchups/` dir
 - LLM output is stripped of code fences via `strip_code_fences()` in `checkpoint_agent/agents.py`
 - LiteLLM handles provider routing; model names auto-prefixed (e.g., `mistral/mistral-medium-2508`)
 - SSL verification is enabled by default; set `CHECKPOINT_SSL_VERIFY=false` for corporate proxies

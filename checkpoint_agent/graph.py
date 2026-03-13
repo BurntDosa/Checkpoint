@@ -4,7 +4,12 @@ from checkpoint_agent.storage import save_checkpoint
 
 def run_pipeline(diff_content: str, commit_hash: str, metadata: dict) -> dict:
     generator = CheckpointGenerator()
-    result = generator(diff_content=diff_content)
+    result = generator(
+        diff_content=diff_content,
+        commit_message=metadata.get("message", ""),
+        author=metadata.get("author", ""),
+        date=metadata.get("date", ""),
+    )
 
     author = metadata.get("author", "Unknown")
     filepath = save_checkpoint(result.markdown_content, commit_hash, author=author)

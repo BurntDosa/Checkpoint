@@ -13,6 +13,7 @@ _CHECKPOINT_SYSTEM_PATTERNS = re.compile(
     r'\.checkpoint\.yaml'
     r'|\.github/workflows/checkpoint\.yml'
     r'|checkpoints/'
+    r'|catchups/'
     r'|MASTER_CONTEXT\.md'
     r')'
 )
@@ -143,7 +144,7 @@ def get_diff_between_refs(base_ref: str, head_ref: str, repo_path: str = ".") ->
     return repo.git.diff(
         base_ref, head_ref,
         "--", ".", ":!.checkpoint.yaml", ":!.github/workflows/checkpoint.yml",
-        ":!checkpoints/", ":!MASTER_CONTEXT.md",
+        ":!checkpoints/", ":!catchups/", ":!MASTER_CONTEXT.md",
     )
 
 def get_commits_between_refs(base_ref: str, head_ref: str, repo_path: str = ".") -> list[dict]:

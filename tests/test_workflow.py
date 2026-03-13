@@ -36,8 +36,13 @@ class TestCheckpointWorkflow(unittest.TestCase):
 
         # Assertions
 
-        # 1. Generator should be called with diff
-        mock_generator_instance.assert_called_once_with(diff_content=initial_state["diff_content"])
+        # 1. Generator should be called with diff + metadata
+        mock_generator_instance.assert_called_once_with(
+            diff_content=initial_state["diff_content"],
+            commit_message="Test commit",
+            author="Test User",
+            date="",
+        )
 
         # 2. Output should be preserved in state
         self.assertEqual(final_state["generated_markdown"], "# Generated Checkpoint")

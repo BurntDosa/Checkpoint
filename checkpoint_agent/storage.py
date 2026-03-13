@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 import re
 
 CHECKPOINT_DIR = "checkpoints"
+CATCHUP_DIR = "catchups"
 
 INITIAL_MASTER_CONTEXT_TEMPLATE = """\
 # Master Context
@@ -144,6 +145,7 @@ def get_checkpoint_stats() -> dict:
         if name == "MASTER_CONTEXT.md":
             continue
         if name.startswith("Checkpoint_"):
+            # Legacy catchup files in checkpoints/ dir
             catchups.append(name[len("Checkpoint_"):-len(".md")])
         elif name.startswith("PR-"):
             pr_summaries.append(name)
@@ -154,6 +156,13 @@ def get_checkpoint_stats() -> dict:
             m = commit_pattern.match(name)
             if m:
                 authors.add(m.group(1))
+
+    # Also scan the new catchups/ directory
+    catchup_dir = Path(CATCHUP_DIR)
+    if catchup_dir.exists():
+        for f in catchup_dir.glob("*.md"):
+            if f.name.startswith("Catchup_"):
+                catchups.append(f.name[len("Catchup_"):-len(".md")])
 
     # Extract date range from commit checkpoint file contents
     dates = []
@@ -224,37 +233,71 @@ def save_master_context(content: str, filename: str = "MASTER_CONTEXT.md") -> st
         f.write(content)
     return os.path.abspath(file_path)
 
-def get_catchup_path(email: str, checkpoint_dir: str = None) -> str:
+def ensure_catchup_dir(catchup_dir: str = None):
+    """Ensures the catchups directory exists."""
+    Path(catchup_dir or CATCHUP_DIR).mkdir(parents=True, exist_ok=True)
+
+
+def get_catchup_path(email: str, catchup_dir: str = None) -> str:
     """Returns the path to the user's catchup file (may not exist yet)."""
-    if checkpoint_dir is None:
-        checkpoint_dir = CHECKPOINT_DIR
+    if catchup_dir is None:
+        catchup_dir = CATCHUP_DIR
     safe_email = "".join([c if c.isalnum() else "_" for c in email])
-    return os.path.join(checkpoint_dir, f"Checkpoint_{safe_email}.md")
+    return os.path.join(catchup_dir, f"Catchup_{safe_email}.md")
 
 
-def save_catchup(content: str, email: str, checkpoint_dir: str = None) -> str:
+def get_existing_catchup(email: str, catchup_dir: str = None) -> str | None:
+    """Read and return the existing catchup content for a user, or None."""
+    path = get_catchup_path(email, catchup_dir)
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read()
+        except Exception:
+            pass
+    return None
+
+
+def save_catchup(content: str, email: str, catchup_dir: str = None) -> str:
     """
-    Overwrites the user's catchup file in the checkpoints directory.
+    Overwrites the user's catchup file in the catchups directory.
     Filename is derived from email (stable across author name changes).
 
     Args:
         content: Markdown content to write
         email: Git author email (used as stable filename key)
-        checkpoint_dir: Custom checkpoint directory (from config or default)
+        catchup_dir: Custom catchup directory (from config or default)
 
     Returns:
         Absolute path to saved file
     """
-    if checkpoint_dir is None:
-        checkpoint_dir = CHECKPOINT_DIR
+    if catchup_dir is None:
+        catchup_dir = CATCHUP_DIR
 
-    os.makedirs(checkpoint_dir, exist_ok=True)
+    ensure_catchup_dir(catchup_dir)
 
-    # Use email as the stable filename key (replace non-alnum with _)
     safe_email = "".join([c if c.isalnum() else "_" for c in email])
-    filename = f"Checkpoint_{safe_email}.md"
-    file_path = os.path.join(checkpoint_dir, filename)
+    filename = f"Catchup_{safe_email}.md"
+    file_path = os.path.join(catchup_dir, filename)
 
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(content)
     return os.path.abspath(file_path)
+
+
+def delete_catchup(email: str, catchup_dir: str = None) -> bool:
+    """
+    Deletes the catchup file for a user (e.g. when they commit and are caught up).
+
+    Args:
+        email: Git author email
+        catchup_dir: Custom catchup directory (from config or default)
+
+    Returns:
+        True if a file was deleted, False if no file existed
+    """
+    path = get_catchup_path(email, catchup_dir)
+    if os.path.exists(path):
+        os.remove(path)
+        return True
+    return False

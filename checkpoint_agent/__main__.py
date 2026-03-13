@@ -115,6 +115,11 @@ features:
         config_file.write_text(default_config)
         print(f"✅ Default config created at {config_file}")
 
+    # Create catchups directory
+    catchups_dir = Path(target_dir) / "catchups"
+    catchups_dir.mkdir(parents=True, exist_ok=True)
+    print(f"✅ Catchups directory created at {catchups_dir}")
+
     # Create boilerplate MASTER_CONTEXT.md so the first push doesn't trigger LLM
     master_context_file = Path(target_dir) / "MASTER_CONTEXT.md"
     if not master_context_file.exists():
@@ -140,7 +145,7 @@ def process_catchup(email, config, last_commit_info=None):
     """Helper to process catchup for a single email."""
     # Lazy imports to avoid loading heavy dependencies for setup commands
     from checkpoint_agent.agents import CatchupGenerator
-    from checkpoint_agent.storage import get_checkpoints_since, save_catchup, get_catchup_path
+    from checkpoint_agent.storage import get_checkpoints_since, save_catchup, get_existing_catchup
 
     print(f"Generating Catchup Summary for user: {email}")
 
@@ -165,14 +170,7 @@ def process_catchup(email, config, last_commit_info=None):
     combined_content = "\n\n".join(checkpoints)
 
     # Read existing catchup to preserve accumulated history
-    existing_catchup = None
-    catchup_path = get_catchup_path(email, config.repository.output_dir)
-    if os.path.exists(catchup_path):
-        try:
-            with open(catchup_path, "r", encoding="utf-8") as f:
-                existing_catchup = f.read()
-        except Exception:
-            pass
+    existing_catchup = get_existing_catchup(email, config.repository.catchup_dir)
 
     generator = CatchupGenerator()
     result = generator(
@@ -185,7 +183,7 @@ def process_catchup(email, config, last_commit_info=None):
         print(f"  Error: Failed to generate summary for {email} (LLM returned None).")
         return
 
-    filepath = save_catchup(result.summary_markdown, email, config.repository.output_dir)
+    filepath = save_catchup(result.summary_markdown, email, config.repository.catchup_dir)
     print(f"  Catchup updated: {filepath}")
 
 def main():
@@ -311,11 +309,11 @@ Examples:
         if args.onboard:
             print("Generating Master Context for New Joinee...")
             file_tree = get_file_tree()
-            
+
             # Generate Mermaid Diagrams - choose method based on config
             if config.features.diagrams:
                 from checkpoint_agent.llm_diagrams import should_use_llm_diagrams, generate_diagrams_llm
-                
+
                 if should_use_llm_diagrams(config):
                     print("  Generating diagrams using LLM (language-agnostic)...")
                     dep_graph, class_hierarchy = generate_diagrams_llm(".", config.languages)
@@ -326,22 +324,44 @@ Examples:
                 print("  Skipping diagram generation (disabled in config)")
                 dep_graph = "Diagrams disabled in configuration"
                 class_hierarchy = "Diagrams disabled in configuration"
-            
+
+            # Read README.md for additional context (truncated)
+            readme_content = ""
+            readme_path = Path("README.md")
+            if readme_path.exists():
+                try:
+                    readme_content = readme_path.read_text(encoding="utf-8", errors="ignore")[:3000]
+                except Exception:
+                    pass
+
+            # Read first-found dependency manifest (truncated)
+            dependency_manifest = ""
+            for manifest_name in ("pyproject.toml", "package.json", "requirements.txt"):
+                manifest_path = Path(manifest_name)
+                if manifest_path.exists():
+                    try:
+                        dependency_manifest = manifest_path.read_text(encoding="utf-8", errors="ignore")[:2000]
+                    except Exception:
+                        pass
+                    break
+
             # Fetch last 5 checkpoints for context
             all_checkpoints = list_checkpoints()
             recent_content = ""
             for cp in all_checkpoints[-5:]: # Last 5
                 with open(cp, "r", encoding="utf-8") as f:
                     # Truncate individual checkpoints to reduce context size
-                    checkpoint_text = truncate_checkpoint(f.read(), max_chars=2000)
+                    checkpoint_text = truncate_checkpoint(f.read(), max_chars=4000)
                     recent_content += f"--- Checkpoint: {cp.name} ---\n{checkpoint_text}\n\n"
-                    
+
             generator = MasterContextGenerator()
             result = generator(
-                file_structure=file_tree, 
+                file_structure=file_tree,
                 recent_checkpoints=recent_content,
                 dependency_graph=dep_graph,
-                class_hierarchy=class_hierarchy
+                class_hierarchy=class_hierarchy,
+                readme_content=readme_content,
+                dependency_manifest=dependency_manifest,
             )
             
             # Handle None result
@@ -527,6 +547,12 @@ Examples:
                 print(markdown_content)
             else:
                 print(f"Checkpoint saved to: {final_state['filepath']}")
+                # Clear returning dev's catchup since they just committed
+                author_email = metadata.get("email", "")
+                if author_email:
+                    from checkpoint_agent.storage import delete_catchup
+                    if delete_catchup(author_email, config.repository.catchup_dir):
+                        print(f"  Cleared stale catchup for {author_email}")
         else:
             # If no arguments provided, do nothing (or print help)
             if not (args.onboard or args.catchup or args.catchup_all):

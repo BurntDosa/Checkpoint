@@ -97,6 +97,7 @@ jobs:
           git config --global user.name 'Checkpoint Agent'
           git config --global user.email 'agent@codecheckpoint.local'
           git add checkpoints/ MASTER_CONTEXT.md 2>/dev/null || true
+          git add -A catchups/ 2>/dev/null || true
           git commit -m "docs: update catchups for ${{ github.sha }}" || echo "No changes to commit"
           git pull --rebase origin ${{ github.ref_name }} || true
           git push origin HEAD:${{ github.ref }}
@@ -173,7 +174,8 @@ jobs:
         run: |
           git config --global user.name 'Checkpoint Agent'
           git config --global user.email 'agent@codecheckpoint.local'
-          git add checkpoints/
+          git add checkpoints/ 2>/dev/null || true
+          git add -A catchups/ 2>/dev/null || true
           git commit -m "docs: add PR summary & catchups for PR #${{ github.event.pull_request.number }}" || echo "No changes to commit"
           git pull --rebase origin ${{ github.event.pull_request.head.ref }} || true
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
@@ -227,6 +229,7 @@ jobs:
         run: |
           git config --global user.name 'Checkpoint Agent'
           git config --global user.email 'agent@codecheckpoint.local'
-          git add MASTER_CONTEXT.md
+          git add MASTER_CONTEXT.md 2>/dev/null || true
+          git add -A catchups/ 2>/dev/null || true
           git commit -m "docs: regenerate MASTER_CONTEXT.md after PR #${{ github.event.pull_request.number }} merge" || echo "No changes to commit"
           git push origin HEAD:${{ github.event.pull_request.base.ref }}

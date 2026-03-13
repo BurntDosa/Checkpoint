@@ -18,6 +18,7 @@ class LLMConfig(BaseModel):
 class RepositoryConfig(BaseModel):
     """Repository-specific configuration."""
     output_dir: str = Field(default="./checkpoints", description="Checkpoint output directory")
+    catchup_dir: str = Field(default="catchups", description="Catchup output directory")
     master_context_file: str = Field(default="MASTER_CONTEXT.md", description="Master context filename")
     ignore_patterns: list[str] = Field(
         default_factory=lambda: ["node_modules", "venv", ".git", "build", "dist", "__pycache__"],
