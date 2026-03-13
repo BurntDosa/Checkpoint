@@ -90,13 +90,20 @@ def list_checkpoints():
         
     return sorted(valid_checkpoints)
 
-def get_checkpoints_since(since_date: datetime.datetime) -> list[str]:
+def get_checkpoints_since(since_date: datetime.datetime, exclude_author: str = None) -> list[str]:
     """
-    Returns content of all checkpoint files. Since each file is a stable
-    per-author living document (newest first), the full content is returned
-    and the LLM filters by the since_date passed in the prompt.
+    Returns content of all checkpoint files, excluding the requesting user's
+    own checkpoint so catchups only contain other people's changes.
+
+    Args:
+        since_date: Used by the LLM prompt for date filtering
+        exclude_author: Author name to exclude (matches Checkpoint-{author}.md)
     """
     checkpoints = list_checkpoints()
+
+    if exclude_author:
+        safe = "".join([c if c.isalnum() else "_" for c in exclude_author])
+        checkpoints = [cp for cp in checkpoints if cp.name != f"Checkpoint-{safe}.md"]
 
     def read_file(path):
         try:

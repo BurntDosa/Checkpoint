@@ -162,7 +162,7 @@ def process_catchup(email, config, last_commit_info=None):
 
     print(f"  Last active: {last_commit['date']} (Commit: {last_commit['hash'][:8]})")
 
-    checkpoints = get_checkpoints_since(last_commit['date'])
+    checkpoints = get_checkpoints_since(last_commit['date'], exclude_author=last_commit.get('author'))
     if not checkpoints:
         print("  No checkpoints found since last activity.")
         return
