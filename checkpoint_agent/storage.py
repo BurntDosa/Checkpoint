@@ -90,13 +90,53 @@ def list_checkpoints():
         
     return sorted(valid_checkpoints)
 
+def _filter_entries_after(content: str, since_date: datetime.datetime) -> str:
+    """
+    Parse a checkpoint file into individual commit entries (split on '## Commit')
+    and return only entries dated after since_date.
+
+    Each entry starts with: ## Commit `hash` — YYYY-MM-DD
+    """
+    if not content.strip():
+        return ""
+
+    # Normalize since_date to a plain date for comparison
+    if hasattr(since_date, 'date'):
+        cutoff = since_date.date()
+    else:
+        cutoff = since_date
+
+    # Split into entries on the --- separator (entries are newest-first)
+    raw_entries = re.split(r'\n---\n', content)
+    date_pattern = re.compile(r'## Commit\s+`[^`]+`\s+—\s+(\d{4}-\d{2}-\d{2})')
+
+    kept = []
+    for entry in raw_entries:
+        entry = entry.strip()
+        if not entry:
+            continue
+        m = date_pattern.search(entry)
+        if m:
+            try:
+                entry_date = datetime.datetime.strptime(m.group(1), "%Y-%m-%d").date()
+                if entry_date >= cutoff:
+                    kept.append(entry)
+            except ValueError:
+                kept.append(entry)  # keep if date can't be parsed
+        else:
+            kept.append(entry)  # keep if no date header found
+
+    return "\n\n---\n\n".join(kept)
+
+
 def get_checkpoints_since(since_date: datetime.datetime, exclude_author: str = None) -> list[str]:
     """
-    Returns content of all checkpoint files, excluding the requesting user's
-    own checkpoint so catchups only contain other people's changes.
+    Returns content of checkpoint files, filtered to only include entries
+    dated on or after since_date, and excluding the requesting user's own
+    checkpoint so catchups only contain other people's changes.
 
     Args:
-        since_date: Used by the LLM prompt for date filtering
+        since_date: Only return checkpoint entries from this date onward
         exclude_author: Author name to exclude (matches Checkpoint-{author}.md)
     """
     checkpoints = list_checkpoints()
@@ -105,15 +145,16 @@ def get_checkpoints_since(since_date: datetime.datetime, exclude_author: str = N
         safe = "".join([c if c.isalnum() else "_" for c in exclude_author])
         checkpoints = [cp for cp in checkpoints if cp.name != f"Checkpoint-{safe}.md"]
 
-    def read_file(path):
+    def read_and_filter(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
-                return f.read()
+                content = f.read()
+            return _filter_entries_after(content, since_date)
         except Exception:
             return ""
 
     with ThreadPoolExecutor(max_workers=10) as executor:
-        contents = list(executor.map(read_file, checkpoints))
+        contents = list(executor.map(read_and_filter, checkpoints))
 
     return [c for c in contents if c]
 

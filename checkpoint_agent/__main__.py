@@ -172,10 +172,17 @@ def process_catchup(email, config, last_commit_info=None):
     # Read existing catchup to preserve accumulated history
     existing_catchup = get_existing_catchup(email, config.repository.catchup_dir)
 
+    # Format date nicely for the LLM prompt (e.g. "March 13, 2026")
+    raw_date = last_commit['date']
+    if hasattr(raw_date, 'strftime'):
+        friendly_date = raw_date.strftime("%B %d, %Y")
+    else:
+        friendly_date = str(raw_date).split("T")[0].split(" ")[0]
+
     generator = CatchupGenerator()
     result = generator(
         checkpoints_content=combined_content,
-        user_last_active_date=str(last_commit['date']),
+        user_last_active_date=friendly_date,
         existing_catchup=existing_catchup,
     )
 
