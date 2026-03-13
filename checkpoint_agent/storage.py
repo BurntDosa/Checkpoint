@@ -100,8 +100,14 @@ def _filter_entries_after(content: str, since_date: datetime.datetime) -> str:
     if not content.strip():
         return ""
 
-    # Normalize since_date to a plain date for comparison
-    if hasattr(since_date, 'date'):
+    # Normalize since_date to UTC before extracting the date.
+    # Checkpoint entry dates are written with datetime.now() on the CI runner (UTC),
+    # but git commit datetimes carry the committer's timezone (e.g. +05:30).
+    # Without this, a commit at 2026-03-14 00:19 IST becomes cutoff March 14,
+    # but the checkpoint entry written at the same moment in UTC is March 13.
+    if hasattr(since_date, 'utcoffset') and since_date.utcoffset() is not None:
+        cutoff = (since_date - since_date.utcoffset()).date()
+    elif hasattr(since_date, 'date'):
         cutoff = since_date.date()
     else:
         cutoff = since_date
