@@ -1,3 +1,68 @@
+## Commit `d5e74e9` — 2026-03-13
+
+## Context
+This change overhauls the LLM prompt quality, catchup lifecycle, and folder structure to address three core problems:
+1. **Prompt reliability**: Original prompts lacked anti-hallucination guards, leading to invented details (e.g., fake line numbers, placeholder text).
+2. **Catchup pollution**: Catchup files mixed with checkpoints created noise in `checkpoints/` history and lacked clear lifecycle rules.
+3. **Context fragmentation**: `MasterContextGenerator` missed critical repo artifacts (README, dependency manifests) and had arbitrary truncation limits.
+
+The commit splits catchups into a dedicated `catchups/` folder with auto-deletion on commit (you’re "caught up" when you commit). All prompts now enforce strict formatting, anti-hallucination rules, and dynamic word counts scaled to diff size. `CatchupGenerator` removes the "What’s In Progress" section, caps critical changes at 5, and adopts 2nd-person voice for clarity.
+
+## Changes
+
+### `checkpoint_agent/storage.py`
+- **Folder structure**:
+  - Catchups moved from `checkpoints/` to new `catchups/` directory.
+  - `get_catchup_path()` → **renamed to `get_existing_catchup()`** (now returns content, not just path).
+  - **New**: `delete_catchup(email, catchup_dir)` auto-called in `run_pipeline()` when a developer commits.
+- **CI integration**: Workflow updated to `git add -A catchups/` to handle both additions (new catchups) and deletions (post-commit cleanup).
+
+### `checkpoint_agent/agents.py`
+- **`CheckpointGenerator`**:
+  - Signature changed: now accepts `commit_message`, `author`, and `date` metadata.
+  - **Prompt overhaul**:
+    - Added anti-hallucination rules (e.g., "Only reference files in the diff").
+    - Dynamic word count targets (`100-200`/`200-400`/`400-800`) based on diff size.
+    - Strict formatting constraints (exact heading levels, no bold, no extra sections).
+  - Output now includes commit metadata header (author/date/message).
+
+- **`CatchupGenerator`**:
+  - Removed "What’s In Progress" section (confirmed in diff by deleted prompt instructions).
+  - Caps "Critical Changes" at 5 items (inferred from prompt update: "focus on the top 5").
+  - Uses 2nd-person voice ("you" instead of "the developer").
+  - **Superseded changes**: Explicitly handles cases where a change replaces a prior approach (new prompt section: "If this change supersedes a previous pattern, note what it replaces").
+
+- **`MasterContextGenerator`**:
+  - **New inputs**:
+    - Ingests `README.md` (first 3k chars) and dependency manifests (`pyproject.toml`/`package.json`/`requirements.txt`, first 2k chars).
+    - Increased checkpoint truncation limit from 2k → 4k chars.
+  - **Per-section guards**: Prompt now requires explicit validation for each section (e.g., "Confirm these dependencies are accurate").
+
+### `checkpoint_agent/cli.py`
+- **Post-commit cleanup**: `run_pipeline()` now calls `delete_catchup(author_email)` after saving a checkpoint.
+- **Setup**: Initialization creates `catchups/` directory alongside `checkpoints/`.
+
+### `checkpoint_agent/git_utils.py`
+- **Metadata flow**: Commit author email now passed through to `CheckpointGenerator` via `run_pipeline()`.
+
+## Impact
+- **Confirmed**:
+  - Catchup files no longer clutter `checkpoints/` history (separate directory + auto-deletion).
+  - `CheckpointGenerator` output now includes commit metadata (author/date/message) in headers.
+  - `MasterContextGenerator` onboarding docs include README and dependency manifest snippets.
+  - CI handles catchup file deletions via `git add -A catchups/`.
+
+- **Likely**:
+  - Fewer hallucinations in checkpoints/catchups due to strict prompt guards (e.g., no invented line numbers).
+  - Smaller catchups for large teams (critical changes capped at 5).
+  - Faster onboarding with dependency manifest + README context in `MASTER_CONTEXT.md`.
+  - Reduced LLM token usage for small diffs (dynamic word count targets).
+
+## Priority Rating
+**HIGH**: The prompt reliability fixes (anti-hallucination guards) and catchup lifecycle changes directly address user-reported issues with invented details and stale files, while the folder split reduces maintenance friction. The dynamic word count scaling ensures consistency across diff sizes.
+
+---
+
 ## Commit `f0cfaae` — 2026-03-12
 
 # **Checkpoint System: Exclusion of Internal Files from Git Diffs**
