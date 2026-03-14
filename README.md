@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.png" alt="Checkpoint" />
+  <img src="https://raw.githubusercontent.com/BurntDosa/Checkpoint/main/assets/banner.png" alt="Checkpoint" />
 </p>
 
 # Checkpoint
