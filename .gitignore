@@ -210,12 +210,18 @@ __marimo__/
 .DS_Store
 **/.DS_Store
 
-# Code Checkpoint specific
+# Code Checkpoint specific (don't run checkpoint on its own repo)
 .checkpoint.yaml          # Configuration file (may contain sensitive paths)
 .env                      # API keys and secrets
-checkpoints/Checkpoint-*  # Per-commit checkpoint files (ephemeral, not committed)
+checkpoints/              # Per-commit checkpoint files
+catchups/                 # Per-author catchup briefings
+MASTER_CONTEXT.md         # Generated onboarding doc
 .checkpoint.log           # Hook execution logs
 .git/hooks/*.checkpoint-backup  # Hook backups
+
+# Project meta
+CLAUDE.md
+tests/
 
 # Git worktrees
 .worktrees/

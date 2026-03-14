@@ -1,18 +1,22 @@
-# Code Checkpoint
+<p align="center">
+  <img src="assets/banner.png" alt="Checkpoint" />
+</p>
 
-**Code Checkpoint** is an AI-powered developer onboarding and context recovery tool for git repositories. It automatically generates living documentation that evolves with every commit, so returning developers can get up to speed instantly and new developers can understand the codebase without reading every file.
+# Checkpoint
+
+**Checkpoint** is an AI-powered developer onboarding and context recovery tool for git repositories. It automatically generates living documentation that evolves with every commit, so returning developers can get up to speed instantly and new developers can understand the codebase without reading every file.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## What it does
 
-- **Master Context** (`MASTER_CONTEXT.md`) — A full architectural overview of the codebase, regenerated on every PR merge. Perfect for new developers.
-- **Personalized Catchup** (`checkpoints/Checkpoint_<email>.md`) — A "While You Were Gone" briefing per developer, updated on every push. Shows exactly what changed since their last commit.
-- **Commit Checkpoints** — Per-commit summaries stored in `checkpoints/`, used as the source material for catchups.
-- **PR Summaries** — A consolidated summary for each pull request.
+- **Master Context** (`MASTER_CONTEXT.md`) -- A full architectural overview of the codebase, regenerated on every PR merge. Perfect for new developers.
+- **Personalized Catchup** (`catchups/Catchup_<email>.md`) -- A "While You Were Gone" briefing per developer, updated on every push. Shows exactly what changed since their last commit. When a developer commits, their catchup file is automatically deleted (they're caught up).
+- **Commit Checkpoints** (`checkpoints/Checkpoint-*.md`) -- Per-commit summaries used as source material for catchups.
+- **PR Summaries** (`checkpoints/PR-*.md`) -- A consolidated summary for each pull request.
 
-All generation runs via **GitHub Actions** — no local hooks required.
+All generation runs via **GitHub Actions** -- no local hooks required.
 
 ## Installation
 
@@ -26,11 +30,11 @@ pip install checkpoint-agent
 # Navigate to your git repository
 cd /path/to/your/repo
 
-# Install the GitHub Actions workflow + create default config
+# Install the GitHub Actions workflow + create default config + boilerplate MASTER_CONTEXT.md
 checkpoint --init
 ```
 
-Then add your LLM API key as a GitHub Secret (e.g. `MISTRAL_API_KEY`) and push — checkpoints will be generated automatically.
+Then add your LLM API key as a GitHub Secret (e.g. `MISTRAL_API_KEY`) and push -- checkpoints will be generated automatically.
 
 ## Commands
 
@@ -38,6 +42,8 @@ Then add your LLM API key as a GitHub Secret (e.g. `MISTRAL_API_KEY`) and push �
 # Setup
 checkpoint --init                        # Install GitHub Actions workflow + create config
 checkpoint --config                      # Show current configuration
+checkpoint --install-hook                # Install git post-commit hook
+checkpoint --uninstall                   # Remove git hook
 
 # Generation (also runs automatically via GitHub Actions)
 checkpoint --onboard                     # Generate MASTER_CONTEXT.md
@@ -48,6 +54,9 @@ checkpoint --catchup-all                 # Generate catchups for all active deve
 # Commit analysis
 checkpoint --commit <hash>               # Analyze a specific commit
 checkpoint --commit <hash> --dry-run     # Preview without saving
+
+# PR summary (used by CI)
+checkpoint --pr <number> <base> <head> <title>
 
 # Info
 checkpoint --stats                       # Show checkpoint statistics
@@ -61,7 +70,7 @@ The workflow runs three jobs automatically:
 
 | Trigger | Job | Output |
 |---|---|---|
-| Push to any branch | Generate commit checkpoints + catchups for all developers | `checkpoints/Checkpoint-*.md`, `checkpoints/Checkpoint_*.md` |
+| Push to any branch | Generate commit checkpoints + catchups for all developers | `checkpoints/Checkpoint-*.md`, `catchups/Catchup_*.md` |
 | PR opened/updated | Generate per-commit checkpoints + PR summary | `checkpoints/PR-*.md` |
 | PR merged to main | Regenerate master context | `MASTER_CONTEXT.md` |
 
@@ -74,14 +83,21 @@ llm:
   provider: mistral          # openai, anthropic, mistral, ollama, google, azure
   model: mistral-medium-2508
   temperature: 0.7
-  max_tokens: 2000
+  max_tokens: 8000
 
 repository:
   output_dir: ./checkpoints
   master_context_file: MASTER_CONTEXT.md
+  ignore_patterns:
+    - node_modules
+    - venv
+    - .git
+  file_patterns:
+    - "**/*.py"
+    - "**/*.js"
+    - "**/*.ts"
 
 features:
-  git_hook: false            # Local hook (GitHub Actions is preferred)
   diagrams: true             # Generate Mermaid diagrams in master context
   auto_catchup: false
 
@@ -106,16 +122,16 @@ Any provider supported by [LiteLLM](https://github.com/BerriAI/litellm): OpenAI,
 ```
 checkpoint_agent/
 ├── __main__.py          # CLI entry point
-├── agents.py            # LLM prompts (CheckpointGenerator, CatchupGenerator, etc.)
-├── graph.py             # Commit analysis pipeline
-├── llm.py               # LiteLLM configuration
-├── config.py            # Pydantic config models
-├── storage.py           # Checkpoint file I/O
-├── git_utils.py         # GitPython wrappers
-├── mermaid_utils.py     # AST-based diagram generation (Python)
-├── llm_diagrams.py      # LLM-based diagram generation (other languages)
+├── agents.py            # LLM-based generator classes (Checkpoint, Catchup, MasterContext, PR)
+├── graph.py             # Commit analysis pipeline (LangGraph)
+├── llm.py               # LiteLLM configuration + provider auto-detection
+├── config.py            # Pydantic config models (.checkpoint.yaml schema)
+├── storage.py           # Checkpoint/catchup file I/O with per-author stable filenames
+├── git_utils.py         # GitPython wrappers (diffs, metadata, author detection)
+├── mermaid_utils.py     # AST-based Mermaid diagram generation (Python)
+├── llm_diagrams.py      # LLM-based diagram generation (non-Python languages)
 ├── setup_wizard.py      # Config display utilities
-├── git_hook_installer.py
+├── git_hook_installer.py # Post-commit hook install/uninstall
 └── templates/
     └── checkpoint.yml   # Bundled GitHub Actions workflow
 ```
