@@ -45,7 +45,7 @@ jobs:
 
           # Filter out bot commits
           COMMITS=$(git log --format="%H %ae" ${{ github.event.before }}..${{ github.sha }} 2>/dev/null \
-            | grep -v "agent@codecheckpoint.local" \
+            | grep -v "Checkpoint-Bot@users.noreply.github.com" \
             | grep -v "noreply@github.com" \
             | awk '{print $1}' || echo "$RAW_COMMITS")
 
@@ -68,7 +68,7 @@ jobs:
       - name: Commit Catchup Summaries
         run: |
           git config --global user.name 'Checkpoint Agent'
-          git config --global user.email 'agent@codecheckpoint.local'
+          git config --global user.email '268151821+Checkpoint-Bot@users.noreply.github.com'
           git add checkpoints/
           git commit -m "docs: update catchups for ${{ github.sha }}" || echo "No changes to commit"
           git pull --rebase origin ${{ github.ref_name }} || true
@@ -113,7 +113,7 @@ jobs:
 
           # Generate checkpoint for each human-authored commit in the PR range
           COMMITS=$(git log "${BASE_SHA}..${HEAD_SHA}" --format="%H %ae" 2>/dev/null \
-            | grep -v "agent@codecheckpoint.local" \
+            | grep -v "Checkpoint-Bot@users.noreply.github.com" \
             | grep -v "noreply@github.com" \
             | awk '{print $1}' || echo "")
           if [ -n "$COMMITS" ]; then
@@ -131,7 +131,7 @@ jobs:
       - name: Commit PR Summary & Catchups
         run: |
           git config --global user.name 'Checkpoint Agent'
-          git config --global user.email 'agent@codecheckpoint.local'
+          git config --global user.email '268151821+Checkpoint-Bot@users.noreply.github.com'
           git add checkpoints/
           git commit -m "docs: add PR summary & catchups for PR #${{ github.event.pull_request.number }}" || echo "No changes to commit"
           git pull --rebase origin ${{ github.event.pull_request.head.ref }} || true
@@ -171,7 +171,7 @@ jobs:
       - name: Commit Updated Master Context
         run: |
           git config --global user.name 'Checkpoint Agent'
-          git config --global user.email 'agent@codecheckpoint.local'
+          git config --global user.email '268151821+Checkpoint-Bot@users.noreply.github.com'
           git add MASTER_CONTEXT.md
           git commit -m "docs: regenerate MASTER_CONTEXT.md after PR #${{ github.event.pull_request.number }} merge" || echo "No changes to commit"
           git push origin HEAD:${{ github.event.pull_request.base.ref }}
