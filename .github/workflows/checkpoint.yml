@@ -10,7 +10,7 @@ on:
 jobs:
   # Job 1: Process commits on any branch push
   checkpoint-push:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.repository != 'BurntDosa/Checkpoint'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -76,7 +76,7 @@ jobs:
 
   # Job 2: Generate per-commit checkpoints and PR summary for open/updated PRs
   checkpoint-pr:
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    if: github.event_name == 'pull_request' && github.event.action != 'closed' && github.repository != 'BurntDosa/Checkpoint'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -139,7 +139,7 @@ jobs:
 
   # Job 3: Regenerate master context when a PR is merged to main
   update-master-context:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true && github.repository != 'BurntDosa/Checkpoint'
     runs-on: ubuntu-latest
     permissions:
       contents: write
