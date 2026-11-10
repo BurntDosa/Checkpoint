@@ -64,8 +64,12 @@ def save_checkpoint(content: str, commit_hash: str, author: str = None, date: st
         with open_text(file_path) as f:
             existing = f.read().strip()
 
-    if re.search(rf'^## Commit `{re.escape(short_hash)}` — ', existing, re.MULTILINE):
-        return os.path.abspath(file_path)
+    existing = re.sub(
+        rf'^## Commit `{re.escape(short_hash)}` — .*?(?=\n---\n|\Z)',
+        '', existing, flags=re.MULTILINE | re.DOTALL,
+    ).strip()
+    existing = re.sub(r'^---\n', '', existing).strip()
+    existing = re.sub(r'\n---$', '', existing).strip()
 
     with open_text(file_path, "w") as f:
         if existing:

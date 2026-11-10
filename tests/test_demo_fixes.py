@@ -27,6 +27,9 @@ class DemoFixTests(unittest.TestCase):
             self.assertIn('changed code', _filter_entries_after(content, datetime(2026, 10, 2, 0, 19, tzinfo=timezone(timedelta(hours=5, minutes=30)))))
             save_checkpoint('changed code', 'abcdef0123', 'Ava', '2026-10-02T00:19:00+05:30')
             self.assertEqual(Path(path).read_text(), content)
+            save_checkpoint('updated analysis', 'abcdef0123', 'Ava', '2026-10-02T00:19:00+05:30')
+            self.assertEqual(Path(path).read_text().count('## Commit'), 1)
+            self.assertIn('updated analysis', Path(path).read_text())
 
     def test_init_does_not_write_placeholder(self):
         with tempfile.TemporaryDirectory() as root:
