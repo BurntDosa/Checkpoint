@@ -1,4 +1,5 @@
 """LLM-based diagram generation for language-agnostic architecture visualization."""
+from checkpoint_agent.file_io import open_text
 from pathlib import Path
 from typing import Tuple
 
@@ -60,7 +61,7 @@ def get_sample_files(repo_path: str = ".", max_files: int = 10, max_lines_per_fi
     for file_path in sampled_files[:max_files]:
         try:
             relative_path = file_path.relative_to(path)
-            with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            with open_text(file_path, errors='ignore') as f:
                 lines = f.readlines()
                 if len(lines) > max_lines_per_file:
                     lines = lines[:max_lines_per_file] + [f"\n... ({len(lines) - max_lines_per_file} more lines) ...\n"]

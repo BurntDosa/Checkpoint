@@ -1,3 +1,4 @@
+from checkpoint_agent.file_io import open_text
 import os
 import ast
 from pathlib import Path
@@ -45,7 +46,7 @@ def _parse_file_cached(file_path: str, mtime: float) -> Tuple[set, set, str]:
     source_node = os.path.basename(file_path).replace(".py", "")
     
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open_text(file_path) as f:
             tree = ast.parse(f.read())
     except Exception:
         return dependencies, inheritance, source_node

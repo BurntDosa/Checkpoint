@@ -221,7 +221,6 @@ MASTER_CONTEXT.md         # Generated onboarding doc
 
 # Project meta
 CLAUDE.md
-tests/
 
 # Git worktrees
 .worktrees/

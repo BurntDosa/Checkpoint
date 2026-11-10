@@ -5,6 +5,7 @@ import os
 import shutil
 from pathlib import Path
 from dotenv import load_dotenv
+from checkpoint_agent.file_io import open_text, read_text, write_text, make_directory
 from checkpoint_agent.config import load_config, get_api_key_for_provider
 
 # Load environment variables from .env file
@@ -61,7 +62,7 @@ def install_ci_workflow(target_dir="."):
 
     # Install workflow
     dest_dir = Path(target_dir) / ".github" / "workflows"
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    make_directory(dest_dir)
     dest_file = dest_dir / "checkpoint.yml"
 
     if dest_file.exists():
@@ -77,7 +78,7 @@ def install_ci_workflow(target_dir="."):
         src = Path(__file__).parent / "templates" / "checkpoint.yml"
         content = src.read_text()
 
-    dest_file.write_text(content)
+    write_text(dest_file, content)
     print(f"✅ GitHub Actions workflow installed at {dest_file}")
 
     # Create default .checkpoint.yaml if it doesn't exist
@@ -112,12 +113,12 @@ features:
   diagrams: true
   auto_catchup: false
 """
-        config_file.write_text(default_config)
+        write_text(config_file, default_config)
         print(f"✅ Default config created at {config_file}")
 
     # Create catchups directory
     catchups_dir = Path(target_dir) / "catchups"
-    catchups_dir.mkdir(parents=True, exist_ok=True)
+    make_directory(catchups_dir)
     print(f"✅ Catchups directory created at {catchups_dir}")
 
     # Create boilerplate MASTER_CONTEXT.md so the first push doesn't trigger LLM
@@ -126,7 +127,7 @@ features:
         from checkpoint_agent.storage import INITIAL_MASTER_CONTEXT_TEMPLATE
         import datetime
         repo_name = Path(target_dir).resolve().name
-        master_context_file.write_text(
+        write_text(master_context_file,
             INITIAL_MASTER_CONTEXT_TEMPLATE.format(
                 repo_name=repo_name,
                 date=datetime.date.today().isoformat(),
@@ -337,7 +338,7 @@ Examples:
             readme_path = Path("README.md")
             if readme_path.exists():
                 try:
-                    readme_content = readme_path.read_text(encoding="utf-8", errors="ignore")[:3000]
+                    readme_content = read_text(readme_path, errors="ignore")[:3000]
                 except Exception:
                     pass
 
@@ -347,7 +348,7 @@ Examples:
                 manifest_path = Path(manifest_name)
                 if manifest_path.exists():
                     try:
-                        dependency_manifest = manifest_path.read_text(encoding="utf-8", errors="ignore")[:2000]
+                        dependency_manifest = read_text(manifest_path, errors="ignore")[:2000]
                     except Exception:
                         pass
                     break
@@ -356,10 +357,12 @@ Examples:
             all_checkpoints = list_checkpoints()
             recent_content = ""
             for cp in all_checkpoints[-5:]: # Last 5
-                with open(cp, "r", encoding="utf-8") as f:
-                    # Truncate individual checkpoints to reduce context size
-                    checkpoint_text = truncate_checkpoint(f.read(), max_chars=4000)
-                    recent_content += f"--- Checkpoint: {cp.name} ---\n{checkpoint_text}\n\n"
+                try:
+                    with open_text(cp) as f:
+                        checkpoint_text = truncate_checkpoint(f.read(), max_chars=4000)
+                        recent_content += f"--- Checkpoint: {cp.name} ---\n{checkpoint_text}\n\n"
+                except OSError:
+                    continue
 
             generator = MasterContextGenerator()
             result = generator(

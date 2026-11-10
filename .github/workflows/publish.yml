@@ -29,10 +29,11 @@ jobs:
         run: python -m build
 
       - name: Verify built version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
         run: |
           ls dist/
           # Fail if the built version doesn't match the tag
-          TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}"
           if ! ls dist/*"${VERSION}"* 1>/dev/null 2>&1; then
             echo "::error::Built artifacts don't match tag ${TAG}. Expected version ${VERSION} in dist/"

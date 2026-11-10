@@ -136,13 +136,29 @@ checkpoint_agent/
     └── checkpoint.yml   # Bundled GitHub Actions workflow
 ```
 
+## 1.2.6
+
+Checkpoint context now states supported reasons directly and qualifies genuine
+guesses within the sentence. Commit diffs include filenames for added, modified,
+renamed, and deleted files.
+
 ## Development
+
+On macOS and Linux, repository context readers skip symbolic links. Document
+writes reject linked destinations and validate opened handles before truncation. Explicit
+custom output directories remain supported, but their components must be real
+directories. Windows filesystem hardening is deferred; these protections do not
+apply to Windows.
+
+Hooks always run the installed `checkpoint` CLI. After upgrading, run
+`checkpoint --install-hook` again to refresh a recognized older generated hook.
+Customized hooks are left unchanged and require manual migration.
 
 ```bash
 git clone https://github.com/BurntDosa/Checkpoint
 cd Checkpoint
 pip install -e ".[dev]"
-pytest tests/
+python -m unittest discover -s tests -v
 ```
 
 ## License

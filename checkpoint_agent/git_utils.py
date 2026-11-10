@@ -45,6 +45,11 @@ def get_diff(commit_hash: str, repo_path: str = ".") -> str:
         # Skip checkpoint system files
         if _is_checkpoint_system_file(d.a_path) or _is_checkpoint_system_file(d.b_path):
             continue
+        old_path = d.a_path or d.b_path
+        new_path = d.b_path or d.a_path
+        diff_text += f"diff --git a/{old_path} b/{new_path}\n"
+        diff_text += f"--- {'/dev/null' if d.new_file else 'a/' + old_path}\n"
+        diff_text += f"+++ {'/dev/null' if d.deleted_file else 'b/' + new_path}\n"
         if d.diff:
             diff_text += d.diff.decode('utf-8', errors='replace') + "\n"
 

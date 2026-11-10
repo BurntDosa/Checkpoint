@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 import yaml
+from checkpoint_agent.file_io import open_text
 from pydantic import BaseModel, Field
 
 
@@ -69,7 +70,7 @@ def load_config(config_path: str = ".checkpoint.yaml") -> CheckpointConfig:
         return get_default_config()
     
     try:
-        with open(path, 'r') as f:
+        with open_text(path) as f:
             data = yaml.safe_load(f) or {}
         
         config = CheckpointConfig(**data)
@@ -94,7 +95,7 @@ def write_config(config: CheckpointConfig, config_path: str = ".checkpoint.yaml"
         path = Path(config_path)
         data = config.model_dump(mode='python')
         
-        with open(path, 'w') as f:
+        with open_text(path, 'w') as f:
             yaml.dump(data, f, default_flow_style=False, sort_keys=False)
         
         print(f"✅ Configuration written to {config_path}")
@@ -190,7 +191,7 @@ def set_api_key_env(provider: str, api_key: str):
     
     # Read existing .env if present
     if env_path.exists():
-        with open(env_path, 'r') as f:
+        with open_text(env_path) as f:
             env_lines = f.readlines()
     
     # Update or add the API key
@@ -205,5 +206,5 @@ def set_api_key_env(provider: str, api_key: str):
         env_lines.append(f"{env_var}={api_key}\n")
     
     # Write back
-    with open(env_path, 'w') as f:
+    with open_text(env_path, 'w') as f:
         f.writelines(env_lines)

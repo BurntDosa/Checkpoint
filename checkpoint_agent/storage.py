@@ -3,6 +3,7 @@ import datetime
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 import re
+from checkpoint_agent.file_io import open_text, read_text, make_directory, remove_file
 
 CHECKPOINT_DIR = "checkpoints"
 CATCHUP_DIR = "catchups"
@@ -37,7 +38,7 @@ _Will be populated automatically._
 
 def ensure_checkpoint_dir():
     """Ensures the checkpoints directory exists."""
-    Path(CHECKPOINT_DIR).mkdir(parents=True, exist_ok=True)
+    make_directory(CHECKPOINT_DIR)
 
 def save_checkpoint(content: str, commit_hash: str, author: str = None) -> str:
     """
@@ -60,10 +61,10 @@ def save_checkpoint(content: str, commit_hash: str, author: str = None) -> str:
     # Prepend to existing content so newest is always at the top
     existing = ""
     if os.path.exists(file_path):
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open_text(file_path) as f:
             existing = f.read().strip()
 
-    with open(file_path, "w", encoding="utf-8") as f:
+    with open_text(file_path, "w") as f:
         if existing:
             f.write(entry + "\n\n---\n\n" + existing + "\n")
         else:
@@ -153,7 +154,7 @@ def get_checkpoints_since(since_date: datetime.datetime, exclude_author: str = N
 
     def read_and_filter(path):
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open_text(path) as f:
                 content = f.read()
             return _filter_entries_after(content, since_date)
         except Exception:
@@ -223,7 +224,7 @@ def get_checkpoint_stats() -> dict:
     for name in commit_files:
         try:
             fp = Path(CHECKPOINT_DIR) / name
-            text = fp.read_text(encoding="utf-8", errors="ignore")
+            text = read_text(fp, errors="ignore")
             for m in date_pattern.finditer(text):
                 try:
                     dates.append(datetime.datetime.strptime(m.group(1), "%Y-%m-%d").date())
@@ -260,13 +261,13 @@ def save_pr_summary(content: str, pr_number: str, head_branch: str, output_dir: 
         Absolute path to saved file
     """
     checkpoint_dir = output_dir if output_dir else CHECKPOINT_DIR
-    os.makedirs(checkpoint_dir, exist_ok=True)
+    make_directory(checkpoint_dir)
 
     safe_branch = "".join([c if c.isalnum() or c in "-_" else "-" for c in head_branch])
     filename = f"PR-{pr_number}-{safe_branch}.md"
     file_path = os.path.join(checkpoint_dir, filename)
 
-    with open(file_path, "w", encoding="utf-8") as f:
+    with open_text(file_path, "w") as f:
         f.write(content)
     return os.path.abspath(file_path)
 
@@ -283,13 +284,13 @@ def save_master_context(content: str, filename: str = "MASTER_CONTEXT.md") -> st
     """
     file_path = filename
     
-    with open(file_path, "w", encoding="utf-8") as f:
+    with open_text(file_path, "w") as f:
         f.write(content)
     return os.path.abspath(file_path)
 
 def ensure_catchup_dir(catchup_dir: str = None):
     """Ensures the catchups directory exists."""
-    Path(catchup_dir or CATCHUP_DIR).mkdir(parents=True, exist_ok=True)
+    make_directory(catchup_dir or CATCHUP_DIR)
 
 
 def get_catchup_path(email: str, catchup_dir: str = None) -> str:
@@ -305,7 +306,7 @@ def get_existing_catchup(email: str, catchup_dir: str = None) -> str | None:
     path = get_catchup_path(email, catchup_dir)
     if os.path.exists(path):
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open_text(path) as f:
                 return f.read()
         except Exception:
             pass
@@ -334,7 +335,7 @@ def save_catchup(content: str, email: str, catchup_dir: str = None) -> str:
     filename = f"Catchup_{safe_email}.md"
     file_path = os.path.join(catchup_dir, filename)
 
-    with open(file_path, "w", encoding="utf-8") as f:
+    with open_text(file_path, "w") as f:
         f.write(content)
     return os.path.abspath(file_path)
 
@@ -351,7 +352,8 @@ def delete_catchup(email: str, catchup_dir: str = None) -> bool:
         True if a file was deleted, False if no file existed
     """
     path = get_catchup_path(email, catchup_dir)
-    if os.path.exists(path):
-        os.remove(path)
+    try:
+        remove_file(path)
         return True
-    return False
+    except FileNotFoundError:
+        return False

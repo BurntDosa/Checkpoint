@@ -12,19 +12,12 @@ def get_prepush_hook_template(auto_catchup: bool = False, repo_root: Optional[Pa
     
     Args:
         auto_catchup: Whether to auto-generate catchup summaries
-        repo_root: Repository root path for detecting dev mode
+        repo_root: Retained for compatibility; hooks always use the installed CLI
         
     Returns:
         Hook script content
     """
-    # Detect if we're in development mode (main.py exists in repo root)
     checkpoint_cmd = "checkpoint"
-    if repo_root and (repo_root / "main.py").exists():
-        # Development mode - use direct Python execution
-        venv_python = repo_root / ".venv" / "bin" / "python"
-        main_py = repo_root / "main.py"
-        if venv_python.exists() and main_py.exists():
-            checkpoint_cmd = f'"{venv_python}" "{main_py}"'
     
     hook = f"""#!/bin/sh
 # Code Checkpoint Auto-generated Pre-Push Hook
@@ -219,8 +212,26 @@ def install_hook(repo_path: str = ".", force: bool = False, auto_catchup: bool =
         # Check if it's already our hook
         if "Code Checkpoint Auto-generated Pre-Push Hook" in existing_content:
             if not force:
-                print("✅ Checkpoint hook already installed.")
-                return True
+                if existing_content == hook_template:
+                    print("✅ Checkpoint hook already installed.")
+                    return True
+                marker = "#!/bin/sh\n# Code Checkpoint Auto-generated Pre-Push Hook"
+                prefix, found, generated = existing_content.rpartition(marker)
+                generated = found + generated
+                legacy_command = f'"{repo_root / ".venv" / "bin" / "python"}" "{repo_root / "main.py"}"'
+                known = [get_prepush_hook_template(enabled) for enabled in (False, True)]
+                known += [template.replace("checkpoint --", legacy_command + " --") for template in known[:]]
+                if not found or generated not in known:
+                    print("❌ Existing checkpoint hook was customized. Back it up and uninstall/reinstall it to update safely.")
+                    return False
+                try:
+                    with open(hook_path, "w") as f:
+                        f.write(prefix + hook_template)
+                except OSError as e:
+                    print(f"❌ Error updating checkpoint hook: {e}")
+                    return False
+                print("✅ Updated checkpoint hook to use the installed CLI.")
+                return make_executable(hook_path)
             else:
                 print("♻️  Reinstalling checkpoint hook...")
         
