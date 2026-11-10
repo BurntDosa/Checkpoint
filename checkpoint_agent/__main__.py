@@ -121,23 +121,9 @@ features:
     make_directory(catchups_dir)
     print(f"✅ Catchups directory created at {catchups_dir}")
 
-    # Create boilerplate MASTER_CONTEXT.md so the first push doesn't trigger LLM
-    master_context_file = Path(target_dir) / "MASTER_CONTEXT.md"
-    if not master_context_file.exists():
-        from checkpoint_agent.storage import INITIAL_MASTER_CONTEXT_TEMPLATE
-        import datetime
-        repo_name = Path(target_dir).resolve().name
-        write_text(master_context_file,
-            INITIAL_MASTER_CONTEXT_TEMPLATE.format(
-                repo_name=repo_name,
-                date=datetime.date.today().isoformat(),
-            )
-        )
-        print(f"✅ Boilerplate MASTER_CONTEXT.md created at {master_context_file}")
-
     print("\n   Next steps:")
     print("   1. Add your LLM API key as a GitHub Secret (e.g. MISTRAL_API_KEY)")
-    print("   2. git add .github/workflows/checkpoint.yml .checkpoint.yaml MASTER_CONTEXT.md && git commit -m 'ci: add checkpoint'")
+    print("   2. git add .github/workflows/checkpoint.yml .checkpoint.yaml && git commit -m 'ci: add checkpoint'")
     print("   3. git push — checkpoints will be auto-generated on every push & PR")
     return True
 
