@@ -94,6 +94,7 @@ BOT_EMAILS = {
     "agent@codecheckpoint.local",
     "noreply@github.com",
     "github-actions[bot]@users.noreply.github.com",
+    "268151821+Checkpoint-Bot@users.noreply.github.com",
 }
 
 def get_active_authors_with_last_commits(days: int = 60, repo_path: str = ".", max_count: int = 1000) -> dict[str, dict]:

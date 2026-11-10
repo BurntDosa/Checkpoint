@@ -5,10 +5,12 @@ import unittest
 from unittest.mock import patch
 
 import yaml
+import git
 
 from checkpoint_agent.config import load_config
 from checkpoint_agent.storage import _filter_entries_after, save_checkpoint
 from checkpoint_agent.__main__ import install_ci_workflow
+from checkpoint_agent.git_utils import get_active_authors_with_last_commits, get_repo
 
 
 class DemoFixTests(unittest.TestCase):
@@ -45,6 +47,21 @@ class DemoFixTests(unittest.TestCase):
         self.assertIn('git merge-base', script)
         self.assertIn('git log --reverse', script)
         self.assertIn('checkpoint-bot@users.noreply.github.com', script)
+
+    def test_catchups_exclude_checkpoint_bot(self):
+        with tempfile.TemporaryDirectory() as root:
+            repo = git.Repo.init(root)
+            path = Path(root) / 'example.txt'
+            for name, email in [('Checkpoint Bot', '268151821+Checkpoint-Bot@users.noreply.github.com'), ('Ava', 'ava@sprout.example')]:
+                path.write_text(name)
+                repo.index.add(['example.txt'])
+                actor = git.Actor(name, email)
+                repo.index.commit(name, author=actor, committer=actor)
+            get_repo.cache_clear()
+            authors = get_active_authors_with_last_commits(repo_path=root)
+            self.assertEqual(list(authors), ['ava@sprout.example'])
+            repo.close()
+            get_repo.cache_clear()
 
 
 if __name__ == '__main__':
