@@ -65,7 +65,7 @@ def get_commit_metadata(commit_hash: str, repo_path: str = ".") -> dict:
     return {
         "author": commit.author.name,
         "email": commit.author.email,
-        "date": commit.committed_datetime.isoformat(),
+        "date": commit.authored_datetime.isoformat(),
         "message": commit.message.strip()
     }
 
@@ -77,7 +77,7 @@ def get_last_commit_by_author(email: str, repo_path: str = ".") -> Optional[dict
         if commit.author.email == email:
             return {
                 "hash": commit.hexsha,
-                "date": commit.committed_datetime, # Keep as datetime object for comparison
+                "date": commit.authored_datetime, # Keep as datetime object for comparison
                 "message": commit.message.strip(),
                 "author": commit.author.name
             }
@@ -94,6 +94,7 @@ BOT_EMAILS = {
     "agent@codecheckpoint.local",
     "noreply@github.com",
     "github-actions[bot]@users.noreply.github.com",
+    "268151821+Checkpoint-Bot@users.noreply.github.com",
 }
 
 def get_active_authors_with_last_commits(days: int = 60, repo_path: str = ".", max_count: int = 1000) -> dict[str, dict]:
@@ -117,7 +118,7 @@ def get_active_authors_with_last_commits(days: int = 60, repo_path: str = ".", m
     author_map = {}
 
     for commit in repo.iter_commits(max_count=max_count):
-        if commit.committed_datetime.replace(tzinfo=None) < cutoff_date:
+        if commit.authored_datetime.replace(tzinfo=None) < cutoff_date:
             break
 
         email = commit.author.email
@@ -127,7 +128,7 @@ def get_active_authors_with_last_commits(days: int = 60, repo_path: str = ".", m
         # First time seeing this human author = their most recent commit
         author_map[email] = {
             "hash": commit.hexsha,
-            "date": commit.committed_datetime,
+            "date": commit.authored_datetime,
             "message": commit.message.strip(),
             "author": commit.author.name
         }
@@ -164,7 +165,7 @@ def get_commits_between_refs(base_ref: str, head_ref: str, repo_path: str = ".")
             "hash": commit.hexsha,
             "author": commit.author.name,
             "email": commit.author.email,
-            "date": commit.committed_datetime.isoformat(),
+            "date": commit.authored_datetime.isoformat(),
             "message": commit.message.strip()
         })
     return commits

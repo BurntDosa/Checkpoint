@@ -114,12 +114,12 @@ class SecurityTests(unittest.TestCase):
             storage.save_master_context("bad")
         self.assertFalse(missing.exists())
 
-    def test_initialization_rejects_dangling_boilerplate_link(self):
+    def test_initialization_leaves_existing_master_context_link_untouched(self):
         from checkpoint_agent.__main__ import install_ci_workflow
         missing = self.root / "missing.md"
         self.link(self.repo / "MASTER_CONTEXT.md", missing)
-        with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(OSError):
-            install_ci_workflow()
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertTrue(install_ci_workflow())
         self.assertFalse(missing.exists())
 
     def test_regular_outputs_external_locations_and_prepend_remain_supported(self):

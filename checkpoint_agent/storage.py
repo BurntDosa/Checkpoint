@@ -40,7 +40,7 @@ def ensure_checkpoint_dir():
     """Ensures the checkpoints directory exists."""
     make_directory(CHECKPOINT_DIR)
 
-def save_checkpoint(content: str, commit_hash: str, author: str = None) -> str:
+def save_checkpoint(content: str, commit_hash: str, author: str = None, date: str = None) -> str:
     """
     Saves the markdown content to a stable per-author file, prepending the new
     commit entry so the file grows as a living document (newest first).
@@ -48,7 +48,7 @@ def save_checkpoint(content: str, commit_hash: str, author: str = None) -> str:
     Returns the absolute path of the saved file.
     """
     ensure_checkpoint_dir()
-    date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+    date_str = datetime.datetime.fromisoformat(date).date().isoformat() if date else datetime.datetime.now().strftime("%Y-%m-%d")
     short_hash = commit_hash[:7]
 
     safe_author = "".join([c if c.isalnum() else "_" for c in author]) if author else "unknown"
@@ -63,6 +63,13 @@ def save_checkpoint(content: str, commit_hash: str, author: str = None) -> str:
     if os.path.exists(file_path):
         with open_text(file_path) as f:
             existing = f.read().strip()
+
+    existing = re.sub(
+        rf'^## Commit `{re.escape(short_hash)}` — .*?(?=\n---\n|\Z)',
+        '', existing, flags=re.MULTILINE | re.DOTALL,
+    ).strip()
+    existing = re.sub(r'^---\n', '', existing).strip()
+    existing = re.sub(r'\n---$', '', existing).strip()
 
     with open_text(file_path, "w") as f:
         if existing:
@@ -101,14 +108,8 @@ def _filter_entries_after(content: str, since_date: datetime.datetime) -> str:
     if not content.strip():
         return ""
 
-    # Normalize since_date to UTC before extracting the date.
-    # Checkpoint entry dates are written with datetime.now() on the CI runner (UTC),
-    # but git commit datetimes carry the committer's timezone (e.g. +05:30).
-    # Without this, a commit at 2026-03-14 00:19 IST becomes cutoff March 14,
-    # but the checkpoint entry written at the same moment in UTC is March 13.
-    if hasattr(since_date, 'utcoffset') and since_date.utcoffset() is not None:
-        cutoff = (since_date - since_date.utcoffset()).date()
-    elif hasattr(since_date, 'date'):
+    # Entry dates and cutoff dates both use the commit's local calendar date.
+    if hasattr(since_date, 'date'):
         cutoff = since_date.date()
     else:
         cutoff = since_date

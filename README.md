@@ -11,7 +11,7 @@
 
 ## What it does
 
-- **Master Context** (`MASTER_CONTEXT.md`) -- A full architectural overview of the codebase, regenerated on every PR merge. Perfect for new developers.
+- **Master Context** (`MASTER_CONTEXT.md`) -- A full architectural overview of the codebase, regenerated after checkpoint-producing pushes and on every PR merge. Perfect for new developers.
 - **Personalized Catchup** (`catchups/Catchup_<email>.md`) -- A "While You Were Gone" briefing per developer, updated on every push. Shows exactly what changed since their last commit. When a developer commits, their catchup file is automatically deleted (they're caught up).
 - **Commit Checkpoints** (`checkpoints/Checkpoint-*.md`) -- Per-commit summaries used as source material for catchups.
 - **PR Summaries** (`checkpoints/PR-*.md`) -- A consolidated summary for each pull request.
@@ -30,7 +30,7 @@ pip install checkpoint-agent
 # Navigate to your git repository
 cd /path/to/your/repo
 
-# Install the GitHub Actions workflow + create default config + boilerplate MASTER_CONTEXT.md
+# Install the GitHub Actions workflow and create default config
 checkpoint --init
 ```
 
@@ -73,6 +73,9 @@ The workflow runs three jobs automatically:
 | Push to any branch | Generate commit checkpoints + catchups for all developers | `checkpoints/Checkpoint-*.md`, `catchups/Catchup_*.md` |
 | PR opened/updated | Generate per-commit checkpoints + PR summary | `checkpoints/PR-*.md` |
 | PR merged to main | Regenerate master context | `MASTER_CONTEXT.md` |
+| Manual backfill (`backfill: true`) | Process up to 50 historical commits | `checkpoints/Checkpoint-*.md` |
+
+Checkpoint-producing pushes also regenerate `MASTER_CONTEXT.md`. `--init` does not create a placeholder context file. For repositories with more than 50 older commits, generate additional history manually with `checkpoint --commit <sha>`.
 
 ## Configuration
 

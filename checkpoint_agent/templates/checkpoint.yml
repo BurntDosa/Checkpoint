@@ -5,12 +5,18 @@ on:
     branches:
       - '**'
   pull_request:
-    types: [opened, synchronize, closed]
+    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
+    inputs:
+      backfill:
+        description: 'Generate checkpoints for up to 50 missing historical commits'
+        type: boolean
+        default: false
 
 jobs:
   # Job 1: Process commits on any branch push
   checkpoint-push:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.backfill)
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -50,27 +56,28 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           BEFORE_SHA: ${{ github.event.before }}
           COMMIT_SHA: ${{ github.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          BACKFILL: ${{ inputs.backfill }}
         run: |
-          # Get human-authored commits that were pushed (exclude bot commits)
-          if [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
-            # New branch — only process commits not already on main/master
-            RAW_COMMITS=$(git rev-list ${COMMIT_SHA} --not origin/main origin/master 2>/dev/null || echo "")
+          if [ "$BACKFILL" = true ] || [ ! -d checkpoints ]; then
+            COMMITS=$(git log --reverse --format='%H %ae' -50 HEAD | grep -viE 'checkpoint-bot@users.noreply.github.com|github-actions\[bot\]@users.noreply.github.com|noreply@github.com' | awk '{print $1}' || true)
+            SKIP_EMAILS=""
           else
-            RAW_COMMITS=$(git rev-list ${BEFORE_SHA}..${COMMIT_SHA} 2>/dev/null || echo "")
+            if [ "${BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
+              BASE_SHA=$(git merge-base "origin/${DEFAULT_BRANCH}" "${COMMIT_SHA}")
+            else
+              BASE_SHA=${BEFORE_SHA}
+            fi
+            COMMITS=$(git log --reverse --format='%H %ae' "${BASE_SHA}..${COMMIT_SHA}" | grep -viE 'checkpoint-bot@users.noreply.github.com|github-actions\[bot\]@users.noreply.github.com|noreply@github.com' | awk '{print $1}' || true)
+            SKIP_EMAILS=$(git log --format='%ae' "${BASE_SHA}..${COMMIT_SHA}" | sort -u | tr '\n' ',' | sed 's/,$//')
           fi
-
-          # Filter out bot commits
-          COMMITS=$(git log --format="%H %ae" ${BEFORE_SHA}..${COMMIT_SHA} 2>/dev/null \
-            | grep -v "Checkpoint-Bot@users.noreply.github.com" \
-            | grep -v "noreply@github.com" \
-            | awk '{print $1}' || echo "$RAW_COMMITS")
 
           # Generate checkpoint for each pushed commit
           if [ -n "$COMMITS" ]; then
             echo "Generating checkpoints for pushed commits..."
             for commit in $COMMITS; do
               # Skip commits that only touch checkpoint config files
-              CHANGED=$(git diff-tree --no-commit-id --name-only -r "$commit" | grep -v -E '^\.(checkpoint\.yaml|github/)')
+              CHANGED=$(git diff-tree --root --no-commit-id --name-only -r "$commit" | grep -v -E '^\.(checkpoint\.yaml|github/)' || true)
               if [ -z "$CHANGED" ]; then
                 echo "  Skipping config-only commit: $commit"
                 continue
@@ -83,8 +90,7 @@ jobs:
           fi
 
           # Update catchup summaries and regenerate MASTER_CONTEXT only if checkpoints exist
-          SKIP_EMAILS=$(git log --format='%ae' ${BEFORE_SHA}..${COMMIT_SHA} 2>/dev/null | sort -u | tr '\n' ',' | sed 's/,$//')
-          if ls checkpoints/Checkpoint-*.md 1>/dev/null 2>&1; then
+          if [ -n "$COMMITS" ] && ls checkpoints/Checkpoint-*.md 1>/dev/null 2>&1; then
             echo "Generating catchup summaries..."
             checkpoint --catchup-all --catchup-skip "$SKIP_EMAILS"
 
@@ -110,7 +116,7 @@ jobs:
 
   # Job 2: Generate per-commit checkpoints and PR summary for open/updated PRs
   checkpoint-pr:
-    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    if: github.event_name == 'pull_request' && contains(fromJSON('["opened", "synchronize", "reopened"]'), github.event.action)
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -161,8 +167,7 @@ jobs:
 
           # Generate checkpoint for each human-authored commit in the PR range
           COMMITS=$(git log "${BASE_SHA}..${HEAD_SHA}" --format="%H %ae" 2>/dev/null \
-            | grep -v "Checkpoint-Bot@users.noreply.github.com" \
-            | grep -v "noreply@github.com" \
+            | grep -viE 'checkpoint-bot@users.noreply.github.com|github-actions\[bot\]@users.noreply.github.com|noreply@github.com' \
             | awk '{print $1}' || echo "")
           if [ -n "$COMMITS" ]; then
             echo "Generating per-commit checkpoints..."

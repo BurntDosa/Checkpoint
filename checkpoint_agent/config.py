@@ -1,5 +1,6 @@
 """Configuration management for Code Checkpoint."""
 import os
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional
 import yaml
@@ -73,7 +74,21 @@ def load_config(config_path: str = ".checkpoint.yaml") -> CheckpointConfig:
         with open_text(path) as f:
             data = yaml.safe_load(f) or {}
         
-        config = CheckpointConfig(**data)
+        def expand(value):
+            if isinstance(value, str):
+                def replace(match):
+                    name = match.group(1)
+                    if name not in os.environ:
+                        raise ValueError(f"Environment variable {name} is not set")
+                    return os.environ[name]
+                return re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}", replace, value)
+            if isinstance(value, dict):
+                return {key: expand(item) for key, item in value.items()}
+            if isinstance(value, list):
+                return [expand(item) for item in value]
+            return value
+
+        config = CheckpointConfig(**expand(data))
         return config
     except Exception as e:
         print(f"⚠️  Error loading config: {e}. Using defaults.")

@@ -12,7 +12,7 @@ def run_pipeline(diff_content: str, commit_hash: str, metadata: dict) -> dict:
     )
 
     author = metadata.get("author", "Unknown")
-    filepath = save_checkpoint(result.markdown_content, commit_hash, author=author)
+    filepath = save_checkpoint(result.markdown_content, commit_hash, author=author, date=metadata.get("date"))
 
     return {
         "diff_content": diff_content,
